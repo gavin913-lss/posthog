@@ -55,7 +55,7 @@ export function EditErrorTrackingWidgetModal({
     const [dateFrom, setDateFrom] = useState<string>(initialDateRange)
     const [tileName, setTileName] = useState<string>(name)
     const [tileDescription, setTileDescription] = useState<string>(description)
-    const [filterTestAccounts, setFilterTestAccounts] = useState<boolean>(
+    const [filterTestAccounts, setFilterTestAccounts] = useState<boolean>(() =>
         resolveWidgetFilterTestAccounts(config.filterTestAccounts as boolean | undefined, filterTestAccountsDefault)
     )
     const [fieldErrors, setFieldErrors] = useState<ErrorTrackingWidgetFieldErrors>({})
