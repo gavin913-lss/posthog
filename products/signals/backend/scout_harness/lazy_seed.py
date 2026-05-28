@@ -504,12 +504,12 @@ def sync_canonical_skills(team: Team, *, prune: bool = False) -> SyncResult:
             "signals_scout: synced canonical skills",
             extra={
                 "team_id": team.id,
-                "created": created,
-                "updated": updated,
-                "backfilled": backfilled,
-                "diverged": diverged,
-                "tombstoned": tombstoned,
-                "pruned": pruned,
+                "created_skills": created,
+                "updated_skills": updated,
+                "backfilled_skills": backfilled,
+                "diverged_skills": diverged,
+                "tombstoned_skills": tombstoned,
+                "pruned_skills": pruned,
             },
         )
 
