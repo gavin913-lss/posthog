@@ -1,4 +1,4 @@
-import { LemonTag, Link } from '@posthog/lemon-ui'
+import { LemonTag, Link, Tooltip } from '@posthog/lemon-ui'
 
 import { TZLabel } from 'lib/components/TZLabel'
 import { SDK_DOCS_LINKS, SDK_TYPE_READABLE_NAME } from 'scenes/onboarding/sdks/sdkConstants'
@@ -12,6 +12,8 @@ interface UsageEntry {
     max_timestamp: string
     release_date: string | null
     is_latest: boolean
+    is_outdated?: boolean
+    status_reason?: string
 }
 
 export const SdkOutdatedRenderer = ({ issue }: { issue: HealthIssue }): JSX.Element => {
@@ -64,14 +66,18 @@ export const SdkOutdatedRenderer = ({ issue }: { issue: HealthIssue }): JSX.Elem
                                     <TZLabel time={entry.max_timestamp} />
                                 </td>
                                 <td className="py-1">
-                                    {entry.is_latest ? (
-                                        <LemonTag type="success" size="small">
-                                            Current
-                                        </LemonTag>
+                                    {entry.is_outdated ? (
+                                        <Tooltip title={entry.status_reason}>
+                                            <LemonTag type="warning" size="small">
+                                                Outdated
+                                            </LemonTag>
+                                        </Tooltip>
                                     ) : (
-                                        <LemonTag type="warning" size="small">
-                                            Outdated
-                                        </LemonTag>
+                                        <Tooltip title={entry.status_reason}>
+                                            <LemonTag type="success" size="small">
+                                                Current
+                                            </LemonTag>
+                                        </Tooltip>
                                     )}
                                 </td>
                             </tr>
