@@ -129,7 +129,7 @@ function WizardOnlyBodyWithSync({ onManualSetup }: { onManualSetup: () => void }
     return (
         <>
             {!isTakeoverActive && <WizardOnlyIntro />}
-            <div className={`${isTakeoverActive ? 'max-w-3xl' : 'max-w-xl'} mx-auto`}>
+            <div className={`${isTakeoverActive ? 'max-w-2xl' : 'max-w-xl'} mx-auto`}>
                 {isTakeoverActive ? <WizardProgressTracker onManualSetup={onManualSetup} /> : <WizardCommandBlock />}
             </div>
         </>

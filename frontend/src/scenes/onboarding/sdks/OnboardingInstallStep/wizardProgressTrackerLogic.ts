@@ -27,6 +27,36 @@ const HEARTBEAT_QUIET_THRESHOLD_MS = 25_000
 
 const WORKFLOW_ID = 'posthog-integration'
 
+function runPhaseMessage(phase: string): string {
+    if (phase === 'completed') {
+        return 'wizard finished'
+    }
+    if (phase === 'error') {
+        return 'wizard hit an error'
+    }
+    if (phase === 'running') {
+        return 'wizard started running'
+    }
+    return `wizard phase: ${phase}`
+}
+
+function taskStatusVerb(status: string): string {
+    switch (status) {
+        case 'in_progress':
+            return 'started:'
+        case 'completed':
+            return 'done:'
+        case 'failed':
+            return 'failed:'
+        case 'canceled':
+            return 'skipped:'
+        case 'pending':
+            return 'queued:'
+        default:
+            return `${status}:`
+    }
+}
+
 /**
  * Drives the wizard takeover panel:
  *   - subscribes to wizardSessionStreamLogic for live session state
@@ -48,6 +78,11 @@ export const wizardProgressTrackerLogic = kea<wizardProgressTrackerLogicType>([
         appendActivity: (text: string) => ({ text, at: Date.now() }),
         tick: (now: number) => ({ now }),
         taskStarted: (taskId: string, at: number) => ({ taskId, at }),
+        // User-initiated dismiss of the floating FAB once a run has reached a terminal phase.
+        dismiss: true,
+        // Set by the install-step confirmation card on mount/unmount. While true, the FAB
+        // hides — so the inline acknowledgement and the floating widget never overlap.
+        setPanelMounted: (mounted: boolean) => ({ mounted }),
     }),
     reducers({
         activityLog: [
@@ -71,6 +106,18 @@ export const wizardProgressTrackerLogic = kea<wizardProgressTrackerLogicType>([
             {} as Record<string, number>,
             {
                 taskStarted: (state, { taskId, at }) => ({ ...state, [taskId]: at }),
+            },
+        ],
+        dismissed: [
+            false,
+            {
+                dismiss: () => true,
+            },
+        ],
+        panelMounted: [
+            false,
+            {
+                setPanelMounted: (_, { mounted }) => mounted,
             },
         ],
     }),
@@ -135,7 +182,7 @@ export const wizardProgressTrackerLogic = kea<wizardProgressTrackerLogicType>([
             }
             const now = Date.now()
             if (!prev) {
-                actions.appendActivity(`session started · ${session.workflow_id} · ${session.skill_id}`)
+                actions.appendActivity(`session started for ${session.skill_id}`)
                 // Tasks we joined mid-run: best-effort, start the per-task clock now.
                 for (const task of session.tasks) {
                     if (task.status === 'in_progress') {
@@ -145,13 +192,13 @@ export const wizardProgressTrackerLogic = kea<wizardProgressTrackerLogicType>([
                 return
             }
             if (session.run_phase !== prev.run_phase) {
-                actions.appendActivity(`run phase → ${session.run_phase}`)
+                actions.appendActivity(runPhaseMessage(session.run_phase))
             }
             const prevTaskKeys = new Set(prev.tasks.map((t) => `${t.id}::${t.status}`))
             for (const task of session.tasks) {
                 const key = `${task.id}::${task.status}`
                 if (!prevTaskKeys.has(key)) {
-                    actions.appendActivity(`${task.status}: ${task.title}`)
+                    actions.appendActivity(`${taskStatusVerb(task.status)} ${task.title}`)
                     if (task.status === 'in_progress') {
                         actions.taskStarted(task.id, now)
                     }
