@@ -25,6 +25,12 @@ const TICK_INTERVAL_MS = 1_000
 const HEARTBEAT_INTERVAL_MS = 30_000
 const HEARTBEAT_QUIET_THRESHOLD_MS = 25_000
 
+// A session counts as "current" if it was updated within the last 10 minutes.
+// Lets the FAB ignore stale terminal sessions left over from previous runs / test
+// data when a user lands on the app, while still re-surfacing recently-completed
+// runs after a quick navigation away and back.
+const SESSION_CURRENT_THRESHOLD_MS = 10 * 60 * 1000
+
 const WORKFLOW_ID = 'posthog-integration'
 
 function runPhaseMessage(phase: string): string {
@@ -83,6 +89,9 @@ export const wizardProgressTrackerLogic = kea<wizardProgressTrackerLogicType>([
         // Set by the install-step confirmation card on mount/unmount. While true, the FAB
         // hides — so the inline acknowledgement and the floating widget never overlap.
         setPanelMounted: (mounted: boolean) => ({ mounted }),
+        // Sticky flag — set the first time we observe a session that's recent enough to
+        // count as live. Old terminal sessions sitting in the DB stay invisible.
+        markSessionCurrent: true,
     }),
     reducers({
         activityLog: [
@@ -118,6 +127,12 @@ export const wizardProgressTrackerLogic = kea<wizardProgressTrackerLogicType>([
             false,
             {
                 setPanelMounted: (_, { mounted }) => mounted,
+            },
+        ],
+        sessionIsCurrent: [
+            false,
+            {
+                markSessionCurrent: () => true,
             },
         ],
     }),
@@ -181,6 +196,10 @@ export const wizardProgressTrackerLogic = kea<wizardProgressTrackerLogicType>([
                 return
             }
             const now = Date.now()
+            const updatedAt = new Date(session.updated_at).getTime()
+            if (!Number.isNaN(updatedAt) && now - updatedAt < SESSION_CURRENT_THRESHOLD_MS) {
+                actions.markSessionCurrent()
+            }
             if (!prev) {
                 actions.appendActivity(`session started for ${session.skill_id}`)
                 // Tasks we joined mid-run: best-effort, start the per-task clock now.

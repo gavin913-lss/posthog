@@ -1,21 +1,96 @@
 import { IconCode } from '@posthog/icons'
 
-import { type SDK } from '~/types'
+import { SDKKey, type SDK } from '~/types'
 
 import { ALL_SDKS } from './allSDKs'
 
 /**
- * Look up an SDK entry by its `key` — the same string the wizard CLI sends as
- * `skill_id`. Returns `null` for unknown ids; callers should fall back gracefully.
+ * Every framework the wizard CLI ships under `src/frameworks/`. The CLI sends
+ * one of these strings as `skill_id` on the wizard session. Kept here (not on
+ * the CLI side) so we can drive the storybook picker and the alias map below
+ * from a single source of truth — keep this in sync with the CLI repo.
+ */
+export const WIZARD_SKILL_IDS = [
+    'android',
+    'angular',
+    'astro',
+    'django',
+    'fastapi',
+    'flask',
+    'javascript-node',
+    'javascript-web',
+    'laravel',
+    'nextjs',
+    'nuxt',
+    'python',
+    'rails',
+    'react-native',
+    'react-router',
+    'ruby',
+    'svelte',
+    'swift',
+    'tanstack-router',
+    'tanstack-start',
+    'vue',
+] as const
+
+/**
+ * Wizard `skill_id` → PostHog SDKKey. The CLI uses hyphenated framework names
+ * (`react-native`) while PostHog's SDK catalogue uses underscored enum keys
+ * (`react_native`), and a handful of frameworks don't map 1:1 — this table
+ * resolves both kinds of divergence.
+ */
+const WIZARD_SKILL_TO_SDK_KEY: Record<string, SDKKey> = {
+    android: SDKKey.ANDROID,
+    angular: SDKKey.ANGULAR,
+    astro: SDKKey.ASTRO,
+    django: SDKKey.DJANGO,
+    'javascript-node': SDKKey.NODE_JS,
+    'javascript-web': SDKKey.JS_WEB,
+    laravel: SDKKey.LARAVEL,
+    nextjs: SDKKey.NEXT_JS,
+    nuxt: SDKKey.NUXT_JS,
+    python: SDKKey.PYTHON,
+    rails: SDKKey.RUBY_ON_RAILS,
+    'react-native': SDKKey.REACT_NATIVE,
+    'react-router': SDKKey.REACT_ROUTER,
+    ruby: SDKKey.RUBY,
+    svelte: SDKKey.SVELTE,
+    swift: SDKKey.IOS,
+    'tanstack-start': SDKKey.TANSTACK_START,
+    vue: SDKKey.VUE_JS,
+    // No PostHog SDK match yet — fastapi, flask, tanstack-router fall through to
+    // the IconCode placeholder + tidied display name.
+}
+
+/**
+ * Look up an SDK entry by a wizard `skill_id`. Tries the alias map first, then
+ * a direct match on SDKKey value, then a normalized underscore form. Returns
+ * `null` for unknown ids; callers should fall back gracefully.
  */
 export function findSdkByKey(skillId: string): SDK | null {
-    return ALL_SDKS.find((sdk) => sdk.key === skillId) ?? null
+    const mappedKey = WIZARD_SKILL_TO_SDK_KEY[skillId]
+    if (mappedKey) {
+        const sdk = ALL_SDKS.find((s) => s.key === mappedKey)
+        if (sdk) {
+            return sdk
+        }
+    }
+    const direct = ALL_SDKS.find((s) => s.key === skillId)
+    if (direct) {
+        return direct
+    }
+    const normalized = skillId.replace(/-/g, '_')
+    if (normalized !== skillId) {
+        return ALL_SDKS.find((s) => s.key === normalized) ?? null
+    }
+    return null
 }
 
 /**
  * Human-readable name for a skill_id. Uses the canonical SDK name when known
- * (`laravel → Laravel`, `nextjs → Next.js`) and falls back to a tidied-up
- * version of the raw id (`some_thing → Some thing`).
+ * (`laravel → Laravel`, `react-native → React Native`) and falls back to a
+ * tidied-up version of the raw id (`fastapi → Fastapi`).
  */
 export function getSkillDisplayName(skillId: string): string {
     const sdk = findSdkByKey(skillId)

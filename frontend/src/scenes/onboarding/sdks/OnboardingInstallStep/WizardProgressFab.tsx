@@ -33,12 +33,12 @@ export function WizardProgressFab(): JSX.Element | null {
 }
 
 function WizardProgressFabInner(): JSX.Element | null {
-    const { displayState, latestSession, elapsedSeconds, dismissed, panelMounted } =
+    const { displayState, latestSession, elapsedSeconds, dismissed, panelMounted, sessionIsCurrent } =
         useValues(wizardProgressTrackerLogic)
     const { dismiss } = useActions(wizardProgressTrackerLogic)
     const { setStepId } = useActions(onboardingLogic)
 
-    if (dismissed || panelMounted || displayState === 'preTakeover') {
+    if (dismissed || panelMounted || displayState === 'preTakeover' || !sessionIsCurrent) {
         return null
     }
 

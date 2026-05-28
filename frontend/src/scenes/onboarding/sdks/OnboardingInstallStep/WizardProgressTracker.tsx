@@ -1,23 +1,22 @@
 import { useActions, useValues } from 'kea'
-import { useEffect } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
-import { LemonBanner, LemonButton } from '@posthog/lemon-ui'
+import { LemonBanner } from '@posthog/lemon-ui'
 
 import { SkillBadge } from '../skillBadge'
 import { type DisplayState, wizardProgressTrackerLogic } from './wizardProgressTrackerLogic'
 
+const AUTO_ADVANCE_SECONDS = 5
+
 /**
  * Inline confirmation card shown on the install step once a wizard session exists.
  *
- * The card is intentionally lightweight — the live, second-by-second progress
- * lives in {@link WizardProgressFab}, which floats in the corner of every other
- * onboarding step. Here we just acknowledge the run and let the user move on.
- *
- * On mount the card sets `panelMounted: true` on the tracker logic, which
- * suppresses the FAB while this card is visible — so the user never sees both
- * the inline acknowledgement and the floating progress widget at once.
+ * While the wizard is running, a small countdown advances the user to the next
+ * onboarding step after a few seconds — the FAB carries the live progress from
+ * that point on. The parent supplies `onAutoAdvance` (typically wired to
+ * `onboardingLogic.goToNextStep`).
  */
-export function WizardProgressTracker({ onManualSetup }: { onManualSetup?: () => void } = {}): JSX.Element | null {
+export function WizardProgressTracker({ onAutoAdvance }: { onAutoAdvance?: () => void } = {}): JSX.Element | null {
     const { displayState, latestSession } = useValues(wizardProgressTrackerLogic)
     const { setPanelMounted } = useActions(wizardProgressTrackerLogic)
 
@@ -34,10 +33,11 @@ export function WizardProgressTracker({ onManualSetup }: { onManualSetup?: () =>
         displayState === 'error' && latestSession.error && typeof latestSession.error === 'object'
             ? (latestSession.error as { type?: string; message?: string })
             : null
+    const showAutoAdvance = (displayState === 'running' || displayState === 'connecting') && onAutoAdvance !== undefined
 
     return (
         <LemonBanner type={bannerTypeFor(displayState)}>
-            <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="flex flex-wrap items-center justify-between gap-3">
                 <div className="min-w-0 space-y-1">
                     <div className="font-semibold">{headlineFor(displayState)}</div>
                     {displayState === 'error' && errorPayload ? (
@@ -53,24 +53,53 @@ export function WizardProgressTracker({ onManualSetup }: { onManualSetup?: () =>
                         </div>
                     )}
                 </div>
-                {showManualSetup(displayState) && onManualSetup ? (
-                    <LemonButton size="small" type="secondary" onClick={onManualSetup}>
-                        Set up manually instead
-                    </LemonButton>
+                {showAutoAdvance ? (
+                    <AutoAdvanceCountdown durationSeconds={AUTO_ADVANCE_SECONDS} onAdvance={onAutoAdvance} />
                 ) : null}
             </div>
         </LemonBanner>
     )
 }
 
+function AutoAdvanceCountdown({
+    durationSeconds,
+    onAdvance,
+}: {
+    durationSeconds: number
+    onAdvance: () => void
+}): JSX.Element {
+    const [remaining, setRemaining] = useState(durationSeconds)
+    // Belt-and-suspenders: navigation usually unmounts us, but during the brief window
+    // before the next scene takes over we may re-render — guard so we only fire once.
+    const firedRef = useRef(false)
+
+    useEffect(() => {
+        if (remaining <= 0) {
+            if (!firedRef.current) {
+                firedRef.current = true
+                onAdvance()
+            }
+            return
+        }
+        const id = window.setTimeout(() => setRemaining((r) => r - 1), 1000)
+        return () => window.clearTimeout(id)
+    }, [remaining, onAdvance])
+
+    return (
+        <div className="text-xs text-muted tabular-nums shrink-0">
+            {remaining > 0 ? `Continuing in ${remaining}s…` : 'Continuing…'}
+        </div>
+    )
+}
+
 /**
  * Used by the parent variant to decide whether to render the takeover at all.
- * Mounts the logic on first call. Returns `true` once we have any session
- * state to display.
+ * Mounts the logic on first call. Returns `true` once we have observed a
+ * recent session — stale terminal sessions sitting in the DB don't trigger it.
  */
 export function useWizardTakeoverActive(): boolean {
-    const { displayState } = useValues(wizardProgressTrackerLogic)
-    return displayState !== 'preTakeover'
+    const { displayState, sessionIsCurrent } = useValues(wizardProgressTrackerLogic)
+    return displayState !== 'preTakeover' && sessionIsCurrent
 }
 
 function bannerTypeFor(state: DisplayState): 'ai' | 'success' | 'error' {
@@ -105,8 +134,4 @@ function subLineFor(state: DisplayState): string {
         default:
             return 'usually 5–10 minutes · watch progress in the corner'
     }
-}
-
-function showManualSetup(state: DisplayState): boolean {
-    return state === 'running' || state === 'connecting' || state === 'error'
 }

@@ -6,11 +6,18 @@ import { FEATURE_FLAGS } from 'lib/constants'
 
 import { wizardSessionStreamLogic } from 'products/wizard/frontend/wizardSessionStreamLogic'
 
+import { WIZARD_SKILL_IDS } from '../skillBadge'
 import { WizardProgressFab } from './WizardProgressFab'
 import { wizardProgressTrackerLogic } from './wizardProgressTrackerLogic'
 
 const WORKFLOW_ID = 'posthog-integration'
-const SKILL_ID = 'laravel'
+const DEFAULT_SKILL_ID = 'laravel'
+
+const SKILL_OPTIONS: string[] = [...WIZARD_SKILL_IDS, 'unknown-skill']
+
+interface StoryArgs {
+    skillId: string
+}
 
 if (typeof window !== 'undefined' && !(window as any).__wizardEventSourceStubbed) {
     class StubEventSource {
@@ -66,13 +73,14 @@ function buildTasks(statuses: TaskStatus[]): WizardSessionFixture['tasks'] {
     return SAMPLE_TASKS.map((t, i) => ({ ...t, status: statuses[i] ?? 'pending' }))
 }
 
-function makeSession(overrides: Partial<WizardSessionFixture>): WizardSessionFixture {
+function makeSession(overrides: Partial<WizardSessionFixture> = {}): WizardSessionFixture {
+    const skill_id = overrides.skill_id ?? DEFAULT_SKILL_ID
     const startedAt = new Date(Date.now() - 74_000).toISOString()
     return {
-        session_id: `${WORKFLOW_ID}-${SKILL_ID}-${startedAt}`,
+        session_id: `${WORKFLOW_ID}-${skill_id}-${startedAt}`,
         team_id: 1,
         workflow_id: WORKFLOW_ID,
-        skill_id: SKILL_ID,
+        skill_id,
         started_at: startedAt,
         run_phase: 'running',
         tasks: [],
@@ -84,19 +92,20 @@ function makeSession(overrides: Partial<WizardSessionFixture>): WizardSessionFix
     }
 }
 
-function withSession(session: WizardSessionFixture | null): StoryFn {
-    return function StoryRender() {
+function withSession(buildSession: (skillId: string) => WizardSessionFixture | null): StoryFn<StoryArgs> {
+    return function StoryRender({ skillId }) {
         useMountedLogic(wizardProgressTrackerLogic)
         const streamLogic = wizardSessionStreamLogic({ workflowId: WORKFLOW_ID })
         useMountedLogic(streamLogic)
 
         useEffect(() => {
             streamLogic.actions.connectionOpened()
+            const session = buildSession(skillId)
             if (session) {
                 streamLogic.actions.sessionUpdated(session as any)
             }
             // eslint-disable-next-line react-hooks/exhaustive-deps
-        }, [])
+        }, [skillId])
 
         return (
             <SceneFrame>
@@ -106,14 +115,21 @@ function withSession(session: WizardSessionFixture | null): StoryFn {
     }
 }
 
-const meta: Meta = {
+const meta: Meta<StoryArgs> = {
     title: 'Scenes-Other/Onboarding/Wizard Progress FAB',
-    component: WizardProgressFab,
     parameters: {
         layout: 'fullscreen',
         viewMode: 'story',
         // FAB is flag-gated; storybook's useFeatureFlag treats any truthy value as "on".
         featureFlags: [FEATURE_FLAGS.ONBOARDING_WIZARD_SYNC],
+    },
+    args: { skillId: DEFAULT_SKILL_ID },
+    argTypes: {
+        skillId: {
+            control: { type: 'select' },
+            options: SKILL_OPTIONS,
+            description: 'Wizard skill_id — drives the session_id and any badge surface.',
+        },
     },
 }
 export default meta
@@ -125,7 +141,7 @@ function SceneFrame({ children }: { children: React.ReactNode }): JSX.Element {
                 <h1 className="text-2xl font-bold mb-1">Onboarding (some later step)</h1>
                 <p className="text-muted mb-8">
                     The user has navigated away from the wizard install step. The FAB persists across the rest of the
-                    onboarding flow until the wizard finishes. Click it to jump back to the full panel.
+                    onboarding flow until the run finishes — click it to jump back to the install step.
                 </p>
             </div>
             {children}
@@ -134,34 +150,14 @@ function SceneFrame({ children }: { children: React.ReactNode }): JSX.Element {
 }
 
 /** No session — FAB renders nothing. */
-export const Hidden: StoryFn = withSession(null)
+export const Hidden: StoryFn<StoryArgs> = withSession(() => null)
 
-/** Wizard just kicked off, no tasks yet — ring spins (indeterminate). */
-export const Analyzing: StoryFn = withSession(
-    makeSession({
-        run_phase: 'running',
-        tasks: [],
-    })
-)
-
-/** Mid-run, ~40% done with a task currently running. */
-export const RunningEarly: StoryFn = withSession(
-    makeSession({
-        run_phase: 'running',
-        tasks: buildTasks(['completed', 'completed', 'in_progress', 'pending', 'pending']),
-    })
-)
-
-/** Late mid-run, ~80% done. Demonstrates the ring filling. */
-export const RunningLate: StoryFn = withSession(
-    makeSession({
-        run_phase: 'running',
-        tasks: buildTasks(['completed', 'completed', 'completed', 'completed', 'in_progress']),
-    })
-)
-
-/** Reconnecting state: live session mid-run, but the SSE transport just errored. */
-export const Connecting: StoryFn = function ConnectingStory() {
+/**
+ * Live session in flight, but the user is on the install step — the inline confirmation
+ * card has set `panelMounted: true`, so the FAB suppresses itself. Documents the
+ * "card and FAB never overlap" contract.
+ */
+export const HiddenByPanel: StoryFn<StoryArgs> = function HiddenByPanelStory({ skillId }) {
     useMountedLogic(wizardProgressTrackerLogic)
     const streamLogic = wizardSessionStreamLogic({ workflowId: WORKFLOW_ID })
     useMountedLogic(streamLogic)
@@ -170,6 +166,64 @@ export const Connecting: StoryFn = function ConnectingStory() {
         streamLogic.actions.connectionOpened()
         streamLogic.actions.sessionUpdated(
             makeSession({
+                skill_id: skillId,
+                run_phase: 'running',
+                tasks: buildTasks(['completed', 'in_progress', 'pending', 'pending', 'pending']),
+            }) as any
+        )
+        wizardProgressTrackerLogic.actions.setPanelMounted(true)
+        return () => wizardProgressTrackerLogic.actions.setPanelMounted(false)
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [skillId])
+
+    return (
+        <SceneFrame>
+            <p className="max-w-4xl mx-auto text-sm text-muted italic">
+                Imagine the install step is rendered here — the confirmation card has flagged itself mounted, so the FAB
+                stays out of the way. You should see nothing in the corner below.
+            </p>
+        </SceneFrame>
+    )
+}
+
+/** Wizard just kicked off, no tasks yet — ring spins (indeterminate). */
+export const Analyzing: StoryFn<StoryArgs> = withSession((skillId) =>
+    makeSession({
+        skill_id: skillId,
+        run_phase: 'running',
+        tasks: [],
+    })
+)
+
+/** Mid-run, ~40% done with a task currently running. */
+export const RunningEarly: StoryFn<StoryArgs> = withSession((skillId) =>
+    makeSession({
+        skill_id: skillId,
+        run_phase: 'running',
+        tasks: buildTasks(['completed', 'completed', 'in_progress', 'pending', 'pending']),
+    })
+)
+
+/** Late mid-run, ~80% done. Demonstrates the ring filling. */
+export const RunningLate: StoryFn<StoryArgs> = withSession((skillId) =>
+    makeSession({
+        skill_id: skillId,
+        run_phase: 'running',
+        tasks: buildTasks(['completed', 'completed', 'completed', 'completed', 'in_progress']),
+    })
+)
+
+/** Reconnecting state: live session mid-run, but the SSE transport just errored. */
+export const Connecting: StoryFn<StoryArgs> = function ConnectingStory({ skillId }) {
+    useMountedLogic(wizardProgressTrackerLogic)
+    const streamLogic = wizardSessionStreamLogic({ workflowId: WORKFLOW_ID })
+    useMountedLogic(streamLogic)
+
+    useEffect(() => {
+        streamLogic.actions.connectionOpened()
+        streamLogic.actions.sessionUpdated(
+            makeSession({
+                skill_id: skillId,
                 run_phase: 'running',
                 tasks: buildTasks(['completed', 'in_progress', 'pending', 'pending', 'pending']),
             }) as any
@@ -179,7 +233,7 @@ export const Connecting: StoryFn = function ConnectingStory() {
         }, 50)
         return () => window.clearTimeout(id)
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [])
+    }, [skillId])
 
     return (
         <SceneFrame>
@@ -189,16 +243,18 @@ export const Connecting: StoryFn = function ConnectingStory() {
 }
 
 /** Wizard finished cleanly; green ring + ✓ + dismiss available. */
-export const Completed: StoryFn = withSession(
+export const Completed: StoryFn<StoryArgs> = withSession((skillId) =>
     makeSession({
+        skill_id: skillId,
         run_phase: 'completed',
         tasks: buildTasks(['completed', 'completed', 'completed', 'completed', 'completed']),
     })
 )
 
 /** Wizard errored; red ring + ✗ + dismiss available. */
-export const Errored: StoryFn = withSession(
+export const Errored: StoryFn<StoryArgs> = withSession((skillId) =>
     makeSession({
+        skill_id: skillId,
         run_phase: 'error',
         tasks: buildTasks(['completed', 'completed', 'failed', 'canceled', 'canceled']),
         error: { type: 'TimeoutError', message: 'Anthropic API timed out' },
@@ -217,7 +273,7 @@ export const Errored: StoryFn = withSession(
  *   t=20s  task 4 ✓, task 5 in_progress
  *   t=24s  task 5 ✓, run_phase = completed (green ring + dismiss visible)
  */
-export const SimulatedRun: StoryFn = function SimulatedRunStory() {
+export const SimulatedRun: StoryFn<StoryArgs> = function SimulatedRunStory({ skillId }) {
     useMountedLogic(wizardProgressTrackerLogic)
     const streamLogic = wizardSessionStreamLogic({ workflowId: WORKFLOW_ID })
     useMountedLogic(streamLogic)
@@ -228,10 +284,10 @@ export const SimulatedRun: StoryFn = function SimulatedRunStory() {
         const { actions } = streamLogic
         const startedAt = new Date().toISOString()
         const base: WizardSessionFixture = {
-            session_id: `${WORKFLOW_ID}-${SKILL_ID}-${startedAt}`,
+            session_id: `${WORKFLOW_ID}-${skillId}-${startedAt}`,
             team_id: 1,
             workflow_id: WORKFLOW_ID,
-            skill_id: SKILL_ID,
+            skill_id: skillId,
             started_at: startedAt,
             run_phase: 'running',
             tasks: [],
@@ -273,7 +329,7 @@ export const SimulatedRun: StoryFn = function SimulatedRunStory() {
             timersRef.current = []
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [])
+    }, [skillId])
 
     return (
         <SceneFrame>

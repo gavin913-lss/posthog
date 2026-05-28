@@ -1,3 +1,4 @@
+import { useActions } from 'kea'
 import { useState } from 'react'
 
 import { LemonButton, LemonModal } from '@posthog/lemon-ui'
@@ -6,6 +7,7 @@ import { useFeatureFlag } from 'lib/hooks/useFeatureFlag'
 
 import { OnboardingStepKey, type SDK } from '~/types'
 
+import { onboardingLogic } from '../../../onboardingLogic'
 import { OnboardingStep } from '../../../OnboardingStep'
 import { AdblockWarning, RealtimeCheckIndicator } from '../../RealtimeCheckIndicator'
 import { SDKGrid } from '../SDKGrid'
@@ -69,11 +71,7 @@ export function WizardOnlyVariant({
             {header}
             {!installationComplete && <AdblockWarning adblockResult={adblockResult} />}
             <div className="mt-6 space-y-8">
-                {isSyncEnabled ? (
-                    <WizardOnlyBodyWithSync onManualSetup={() => setManualModalOpen(true)} />
-                ) : (
-                    <WizardOnlyBodyStatic />
-                )}
+                {isSyncEnabled ? <WizardOnlyBodyWithSync /> : <WizardOnlyBodyStatic />}
 
                 <div className="text-center">
                     <LemonButton type="tertiary" size="small" onClick={() => setManualModalOpen(true)}>
@@ -124,13 +122,19 @@ function WizardOnlyBodyStatic(): JSX.Element {
 
 // Mounted only when ONBOARDING_WIZARD_SYNC = "test"; subscribes to the SSE stream
 // via wizardProgressTrackerLogic, so we keep it isolated behind the flag.
-function WizardOnlyBodyWithSync({ onManualSetup }: { onManualSetup: () => void }): JSX.Element {
+function WizardOnlyBodyWithSync(): JSX.Element {
     const isTakeoverActive = useWizardTakeoverActive()
+    const { goToNextStep } = useActions(onboardingLogic)
+
+    if (isTakeoverActive) {
+        // Full container width — the banner aligns with the rest of the install step.
+        return <WizardProgressTracker onAutoAdvance={goToNextStep} />
+    }
     return (
         <>
-            {!isTakeoverActive && <WizardOnlyIntro />}
-            <div className={`${isTakeoverActive ? 'max-w-2xl' : 'max-w-xl'} mx-auto`}>
-                {isTakeoverActive ? <WizardProgressTracker onManualSetup={onManualSetup} /> : <WizardCommandBlock />}
+            <WizardOnlyIntro />
+            <div className="max-w-xl mx-auto">
+                <WizardCommandBlock />
             </div>
         </>
     )
