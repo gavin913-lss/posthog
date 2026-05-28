@@ -1,4 +1,7 @@
+import { urls } from 'scenes/urls'
+
 import type { DashboardWidgetProductAccess } from '../types'
+import { errorTrackingWidgetConfigSchema } from './configSchemas'
 import type { WidgetAvailabilityConfig } from './widgetAvailability'
 
 export const DASHBOARD_WIDGET_HEADER_LAYOUTS = ['simple', 'dashboard_tile'] as const
@@ -34,12 +37,34 @@ export type DashboardWidgetCatalogEntry = {
 }
 
 /** New widget types: add here. See products/dashboards/CONTRIBUTING.md. */
-export const DASHBOARD_WIDGET_CATALOG = {} as const satisfies Record<string, DashboardWidgetCatalogEntry>
+export const DASHBOARD_WIDGET_CATALOG = {
+    error_tracking_list: {
+        groupId: 'error_tracking',
+        groupLabel: 'Error tracking',
+        label: 'Top issues',
+        description: 'Ranked list of the most impactful error tracking issues.',
+        headerTitle: 'Top issues',
+        defaultConfig: errorTrackingWidgetConfigSchema.parse({
+            limit: 10,
+            dateRange: { date_from: '-7d' },
+        }),
+        defaultLayout: { w: 6, h: 5, minW: 6, minH: 3 },
+        productAccess: 'error_tracking',
+        headerLayout: 'dashboard_tile' satisfies DashboardWidgetHeaderLayout,
+        headerMeta: {
+            showWidgetType: true,
+            showDateRange: true,
+        } satisfies DashboardWidgetHeaderMeta,
+        titleHref: urls.errorTracking(),
+    },
+} as const satisfies Record<string, DashboardWidgetCatalogEntry>
 
 export type DashboardWidgetCatalogKey = keyof typeof DASHBOARD_WIDGET_CATALOG
 
 /** New widget_type aliases: add here. See products/dashboards/CONTRIBUTING.md. */
-export const DASHBOARD_WIDGET_TYPE_ALIASES: Partial<Record<string, DashboardWidgetCatalogKey>> = {}
+export const DASHBOARD_WIDGET_TYPE_ALIASES: Partial<Record<string, DashboardWidgetCatalogKey>> = {
+    error_tracking: 'error_tracking_list',
+}
 
 export function resolveDashboardWidgetCatalogKey(widgetType: string): DashboardWidgetCatalogKey | undefined {
     if (widgetType in DASHBOARD_WIDGET_CATALOG) {

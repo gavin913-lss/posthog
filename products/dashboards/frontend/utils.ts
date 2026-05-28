@@ -2,9 +2,16 @@ import type { DashboardTile, QueryBasedInsightModel } from '~/types'
 
 import { dashboardsWidgetsPartialUpdate } from './generated/api'
 import { WidgetConfigValidationError, type WidgetFieldErrors } from './widget_types/widgetConfigValidation'
+import { parseErrorTrackingWidgetConfigApiError } from './widgets/error_tracking/errorTrackingWidgetConfigValidation'
 
-function parseWidgetConfigApiError(_widgetType: string, _error: unknown): WidgetFieldErrors | null {
-    return null
+function parseWidgetConfigApiError(widgetType: string, error: unknown): WidgetFieldErrors | null {
+    switch (widgetType) {
+        case 'error_tracking':
+        case 'error_tracking_list':
+            return parseErrorTrackingWidgetConfigApiError(error)
+        default:
+            return null
+    }
 }
 
 export async function updateDashboardWidgetTileConfig({
