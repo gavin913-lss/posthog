@@ -2810,6 +2810,7 @@ export namespace Schemas {
 
     export interface LifecycleFilter {
       showLegend?: boolean | null;
+      showPercentagesOnSeries?: boolean | null;
       showValuesOnSeries?: boolean | null;
       stacked?: boolean | null;
       toggledLifecycles?: LifecycleToggle[] | null;
