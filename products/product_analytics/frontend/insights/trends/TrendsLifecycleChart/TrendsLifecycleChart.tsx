@@ -60,6 +60,7 @@ export function TrendsLifecycleChart({ context, inSharedMode = false }: TrendsLi
         hasPersonsModal,
         querySource,
         showValuesOnSeries,
+        showPercentagesOnSeries,
     } = useValues(trendsDataLogic(insightProps))
     const { timezone, weekStartDay, baseCurrency } = useValues(teamLogic)
 
@@ -92,7 +93,9 @@ export function TrendsLifecycleChart({ context, inSharedMode = false }: TrendsLi
                 interval,
                 timezone,
                 allDays: currentPeriodResult?.days ?? [],
-                valueLabels: showValuesOnSeries ? { formatter: valueLabelFormatter } : false,
+                valueLabels: showValuesOnSeries
+                    ? { formatter: valueLabelFormatter, showPercentages: !!showPercentagesOnSeries }
+                    : false,
                 tooltip: LIFECYCLE_TOOLTIP_CONFIG,
             }),
         [
@@ -104,6 +107,7 @@ export function TrendsLifecycleChart({ context, inSharedMode = false }: TrendsLi
             timezone,
             currentPeriodResult?.days,
             showValuesOnSeries,
+            showPercentagesOnSeries,
             valueLabelFormatter,
         ]
     )
