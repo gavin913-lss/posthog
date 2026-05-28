@@ -3,7 +3,7 @@
  * MCP service uses these Zod schemas for generated tool handlers.
  * To regenerate: hogli build:openapi
  *
- * PostHog API - MCP 10 enabled ops
+ * PostHog API - MCP 14 enabled ops
  * OpenAPI spec version: 1.0.0
  */
 import * as zod from 'zod'
@@ -161,12 +161,9 @@ export const DashboardsDestroyQueryParams = /* @__PURE__ */ zod.object({
 })
 
 /**
- * Add a markdown text tile to a dashboard.
-
-Text tiles render as markdown blocks on the dashboard — useful as section headings, dividers,
-or annotations between insight tiles to give the dashboard structure.
+ * Copy an existing dashboard tile to another dashboard (insight, text card, or widget tile).
  */
-export const DashboardsCreateTextTileCreateParams = /* @__PURE__ */ zod.object({
+export const DashboardsCopyTileCreateParams = /* @__PURE__ */ zod.object({
     id: zod.number().describe('A unique integer value identifying this dashboard.'),
     project_id: zod
         .string()
@@ -175,76 +172,36 @@ export const DashboardsCreateTextTileCreateParams = /* @__PURE__ */ zod.object({
         ),
 })
 
-export const DashboardsCreateTextTileCreateQueryParams = /* @__PURE__ */ zod.object({
+export const DashboardsCopyTileCreateQueryParams = /* @__PURE__ */ zod.object({
     format: zod.enum(['json', 'txt']).optional(),
 })
 
-export const dashboardsCreateTextTileCreateBodyBodyMax = 4000
+export const DashboardsCopyTileCreateBody = /* @__PURE__ */ zod.object({
+    fromDashboardId: zod.number().describe('Dashboard id the tile currently belongs to.'),
+    tileId: zod.number().describe('Dashboard tile id to copy.'),
+})
 
-export const dashboardsCreateTextTileCreateBodyColorMax = 400
-
-export const DashboardsCreateTextTileCreateBody = /* @__PURE__ */ zod.object({
-    body: zod
+export const DashboardsMoveTilePartialUpdateParams = /* @__PURE__ */ zod.object({
+    id: zod.number().describe('A unique integer value identifying this dashboard.'),
+    project_id: zod
         .string()
-        .min(1)
-        .max(dashboardsCreateTextTileCreateBodyBodyMax)
         .describe(
-            'Markdown body for the text tile. Supports headings, lists, and inline formatting. Useful as a dashboard section heading, divider, or annotation between insights. Max 4000 characters.'
+            "Project ID of the project you're trying to access. To find the ID of the project, make a call to /api/projects/."
         ),
-    layouts: zod
+})
+
+export const DashboardsMoveTilePartialUpdateQueryParams = /* @__PURE__ */ zod.object({
+    format: zod.enum(['json', 'txt']).optional(),
+})
+
+export const DashboardsMoveTilePartialUpdateBody = /* @__PURE__ */ zod.object({
+    toDashboard: zod.number().optional().describe('Destination dashboard ID.'),
+    tile: zod
         .object({
-            sm: zod
-                .object({
-                    x: zod.number().optional().describe('Column position in the dashboard grid (0-indexed).'),
-                    y: zod.number().optional().describe('Row position in the dashboard grid (0-indexed).'),
-                    w: zod.number().optional().describe('Width in grid columns. The desktop grid is 12 columns wide.'),
-                    h: zod.number().optional().describe('Height in grid rows.'),
-                })
-                .optional()
-                .describe('Layout for the standard (desktop) breakpoint. The grid is 12 columns wide.'),
-            xs: zod
-                .object({
-                    x: zod.number().optional().describe('Column position in the dashboard grid (0-indexed).'),
-                    y: zod.number().optional().describe('Row position in the dashboard grid (0-indexed).'),
-                    w: zod.number().optional().describe('Width in grid columns. The desktop grid is 12 columns wide.'),
-                    h: zod.number().optional().describe('Height in grid rows.'),
-                })
-                .optional()
-                .describe('Layout for the small (mobile) breakpoint. The grid is 1 column wide.'),
+            id: zod.number().describe('Dashboard tile ID to move.'),
         })
         .optional()
-        .describe(
-            'Optional grid layout per breakpoint. If omitted, the tile is placed at the bottom of the dashboard using the default size. Text tiles typically use a thin full-width banner (e.g. w=12, h=1).'
-        ),
-    color: zod
-        .string()
-        .max(dashboardsCreateTextTileCreateBodyColorMax)
-        .nullish()
-        .describe("Optional accent color name (e.g. 'blue', 'green', 'purple', 'black')."),
-})
-
-/**
- * Soft-delete a single tile from a dashboard.
-
-Works for text, insight, and button tiles. The underlying Insight, Text, or ButtonTile
-object is preserved — only the dashboard tile is hidden. To delete the entire dashboard,
-use the dashboard delete endpoint instead.
- */
-export const DashboardsDeleteTileParams = /* @__PURE__ */ zod.object({
-    id: zod.number().describe('A unique integer value identifying this dashboard.'),
-    project_id: zod
-        .string()
-        .describe(
-            "Project ID of the project you're trying to access. To find the ID of the project, make a call to /api/projects/."
-        ),
-})
-
-export const DashboardsDeleteTileQueryParams = /* @__PURE__ */ zod.object({
-    format: zod.enum(['json', 'txt']).optional(),
-})
-
-export const DashboardsDeleteTileBody = /* @__PURE__ */ zod.object({
-    tile_id: zod.number().describe('ID of the dashboard tile to delete. Use dashboard-get to look up tile IDs.'),
+        .describe('Tile to move, identified by its dashboard tile ID.'),
 })
 
 export const DashboardsReorderTilesCreateParams = /* @__PURE__ */ zod.object({
@@ -260,20 +217,11 @@ export const DashboardsReorderTilesCreateQueryParams = /* @__PURE__ */ zod.objec
     format: zod.enum(['json', 'txt']).optional(),
 })
 
-export const dashboardsReorderTilesCreateBodyLayoutDefault = `preserve`
-
 export const DashboardsReorderTilesCreateBody = /* @__PURE__ */ zod.object({
     tile_order: zod
         .array(zod.number())
         .min(1)
         .describe('Array of tile IDs in the desired display order (top to bottom, left to right).'),
-    layout: zod
-        .enum(['preserve', 'two_column', 'full_width'])
-        .describe('* `preserve` - preserve\n* `two_column` - two_column\n* `full_width` - full_width')
-        .default(dashboardsReorderTilesCreateBodyLayoutDefault)
-        .describe(
-            "How to size tiles when reordering. 'preserve' (default) keeps each tile's existing width and height and only repacks positions in the new order. 'two_column' forces a 6-wide × 5-tall grid (two tiles per row). 'full_width' forces each tile to span the full 12-column row at height 5.\n\n* `preserve` - preserve\n* `two_column` - two_column\n* `full_width` - full_width"
-        ),
 })
 
 /**
@@ -316,10 +264,7 @@ export const DashboardsRunInsightsRetrieveQueryParams = /* @__PURE__ */ zod.obje
         ),
 })
 
-/**
- * Update the markdown body, layout, or color of an existing text tile on a dashboard.
- */
-export const DashboardsUpdateTextTileCreateParams = /* @__PURE__ */ zod.object({
+export const DashboardsRunWidgetsRetrieveParams = /* @__PURE__ */ zod.object({
     id: zod.number().describe('A unique integer value identifying this dashboard.'),
     project_id: zod
         .string()
@@ -328,48 +273,161 @@ export const DashboardsUpdateTextTileCreateParams = /* @__PURE__ */ zod.object({
         ),
 })
 
-export const DashboardsUpdateTextTileCreateQueryParams = /* @__PURE__ */ zod.object({
+export const DashboardsRunWidgetsRetrieveQueryParams = /* @__PURE__ */ zod.object({
+    format: zod.enum(['json', 'txt']).optional(),
+    tile_ids: zod.string().describe('Comma-separated dashboard tile IDs to run widgets for.'),
+})
+
+/**
+ * Add a widget tile to a dashboard.
+ */
+export const DashboardsWidgetsCreateParams = /* @__PURE__ */ zod.object({
+    id: zod.number().describe('A unique integer value identifying this dashboard.'),
+    project_id: zod
+        .string()
+        .describe(
+            "Project ID of the project you're trying to access. To find the ID of the project, make a call to /api/projects/."
+        ),
+})
+
+export const DashboardsWidgetsCreateQueryParams = /* @__PURE__ */ zod.object({
     format: zod.enum(['json', 'txt']).optional(),
 })
 
-export const dashboardsUpdateTextTileCreateBodyBodyMax = 4000
+export const dashboardsWidgetsCreateBodyWidgetTypeMax = 64
 
-export const dashboardsUpdateTextTileCreateBodyColorMax = 400
+export const dashboardsWidgetsCreateBodyNameMax = 400
 
-export const DashboardsUpdateTextTileCreateBody = /* @__PURE__ */ zod.object({
-    tile_id: zod.number().describe('ID of the dashboard tile to update. Use dashboard-get to look up tile IDs.'),
-    body: zod
+export const DashboardsWidgetsCreateBody = /* @__PURE__ */ zod.object({
+    widget_type: zod
         .string()
-        .min(1)
-        .max(dashboardsUpdateTextTileCreateBodyBodyMax)
-        .optional()
-        .describe('New markdown body for the text tile. Omit to leave the body unchanged. Max 4000 characters.'),
-    layouts: zod
-        .object({
-            sm: zod
-                .object({
-                    x: zod.number().optional().describe('Column position in the dashboard grid (0-indexed).'),
-                    y: zod.number().optional().describe('Row position in the dashboard grid (0-indexed).'),
-                    w: zod.number().optional().describe('Width in grid columns. The desktop grid is 12 columns wide.'),
-                    h: zod.number().optional().describe('Height in grid rows.'),
-                })
-                .optional()
-                .describe('Layout for the standard (desktop) breakpoint. The grid is 12 columns wide.'),
-            xs: zod
-                .object({
-                    x: zod.number().optional().describe('Column position in the dashboard grid (0-indexed).'),
-                    y: zod.number().optional().describe('Row position in the dashboard grid (0-indexed).'),
-                    w: zod.number().optional().describe('Width in grid columns. The desktop grid is 12 columns wide.'),
-                    h: zod.number().optional().describe('Height in grid rows.'),
-                })
-                .optional()
-                .describe('Layout for the small (mobile) breakpoint. The grid is 1 column wide.'),
-        })
-        .optional()
-        .describe('New grid layout per breakpoint. Omit to leave the layout unchanged.'),
-    color: zod
+        .max(dashboardsWidgetsCreateBodyWidgetTypeMax)
+        .describe('Widget type identifier from dashboard-widget-catalog-list.'),
+    config: zod
+        .unknown()
+        .describe(
+            'Widget-specific configuration JSON. Shape depends on widget_type; see config_schema_hints in dashboard-widget-catalog-list.'
+        ),
+    name: zod
         .string()
-        .max(dashboardsUpdateTextTileCreateBodyColorMax)
+        .max(dashboardsWidgetsCreateBodyNameMax)
         .nullish()
-        .describe('New accent color name, empty string or null to clear. Omit to leave unchanged.'),
+        .describe('Optional custom display name for the widget tile.'),
+    description: zod
+        .string()
+        .optional()
+        .describe('Optional markdown description shown when show_description is enabled.'),
+    layouts: zod.unknown().optional().describe('Optional react-grid-layout positions keyed by breakpoint (sm, xs).'),
+    show_description: zod.boolean().optional().describe('Whether to show the description on the dashboard tile.'),
+})
+
+/**
+ * Update an existing widget tile on a dashboard.
+ */
+export const DashboardsWidgetsPartialUpdateParams = /* @__PURE__ */ zod.object({
+    id: zod.number().describe('A unique integer value identifying this dashboard.'),
+    project_id: zod
+        .string()
+        .describe(
+            "Project ID of the project you're trying to access. To find the ID of the project, make a call to /api/projects/."
+        ),
+    tile_id: zod.number().describe('Dashboard tile ID from dashboard-get (must be a widget tile).'),
+})
+
+export const DashboardsWidgetsPartialUpdateQueryParams = /* @__PURE__ */ zod.object({
+    format: zod.enum(['json', 'txt']).optional(),
+})
+
+export const dashboardsWidgetsPartialUpdateBodyNameMax = 400
+
+export const DashboardsWidgetsPartialUpdateBody = /* @__PURE__ */ zod.object({
+    config: zod
+        .unknown()
+        .optional()
+        .describe("Updated widget configuration JSON. Validated for the tile's widget_type."),
+    name: zod
+        .string()
+        .max(dashboardsWidgetsPartialUpdateBodyNameMax)
+        .nullish()
+        .describe('Optional custom display name for the widget tile.'),
+    description: zod
+        .string()
+        .optional()
+        .describe('Optional markdown description shown when show_description is enabled.'),
+    show_description: zod.boolean().optional().describe('Whether to show the description on the dashboard tile.'),
+    layouts: zod.unknown().optional().describe('Optional react-grid-layout positions keyed by breakpoint (sm, xs).'),
+})
+
+/**
+ * Add multiple widget tiles to a dashboard in one atomic request.
+ */
+export const DashboardsWidgetsBatchCreateParams = /* @__PURE__ */ zod.object({
+    id: zod.number().describe('A unique integer value identifying this dashboard.'),
+    project_id: zod
+        .string()
+        .describe(
+            "Project ID of the project you're trying to access. To find the ID of the project, make a call to /api/projects/."
+        ),
+})
+
+export const DashboardsWidgetsBatchCreateQueryParams = /* @__PURE__ */ zod.object({
+    format: zod.enum(['json', 'txt']).optional(),
+})
+
+export const dashboardsWidgetsBatchCreateBodyWidgetsItemWidgetTypeMax = 64
+
+export const dashboardsWidgetsBatchCreateBodyWidgetsItemNameMax = 400
+
+export const dashboardsWidgetsBatchCreateBodyWidgetsMax = 10
+
+export const DashboardsWidgetsBatchCreateBody = /* @__PURE__ */ zod.object({
+    widgets: zod
+        .array(
+            zod.object({
+                widget_type: zod
+                    .string()
+                    .max(dashboardsWidgetsBatchCreateBodyWidgetsItemWidgetTypeMax)
+                    .describe('Widget type identifier from dashboard-widget-catalog-list.'),
+                config: zod
+                    .unknown()
+                    .describe(
+                        'Widget-specific configuration JSON. Shape depends on widget_type; see config_schema_hints in dashboard-widget-catalog-list.'
+                    ),
+                name: zod
+                    .string()
+                    .max(dashboardsWidgetsBatchCreateBodyWidgetsItemNameMax)
+                    .nullish()
+                    .describe('Optional custom display name for the widget tile.'),
+                description: zod
+                    .string()
+                    .optional()
+                    .describe('Optional markdown description shown when show_description is enabled.'),
+                layouts: zod
+                    .unknown()
+                    .optional()
+                    .describe('Optional react-grid-layout positions keyed by breakpoint (sm, xs).'),
+                show_description: zod
+                    .boolean()
+                    .optional()
+                    .describe('Whether to show the description on the dashboard tile.'),
+            })
+        )
+        .min(1)
+        .max(dashboardsWidgetsBatchCreateBodyWidgetsMax)
+        .describe('Widget tiles to add atomically (1–10). Each entry uses the same fields as a single add request.'),
+})
+
+/**
+ * List registered dashboard widget types and config hints for agents.
+ */
+export const DashboardsWidgetCatalogRetrieveParams = /* @__PURE__ */ zod.object({
+    project_id: zod
+        .string()
+        .describe(
+            "Project ID of the project you're trying to access. To find the ID of the project, make a call to /api/projects/."
+        ),
+})
+
+export const DashboardsWidgetCatalogRetrieveQueryParams = /* @__PURE__ */ zod.object({
+    format: zod.enum(['json', 'txt']).optional(),
 })
