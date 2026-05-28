@@ -32,3 +32,14 @@ export const errorTrackingWidgetConfigSchema = baseWidgetConfigSchema.extend({
 })
 
 export type ErrorTrackingWidgetConfig = z.infer<typeof errorTrackingWidgetConfigSchema>
+
+export const sessionReplayWidgetConfigSchema = baseWidgetConfigSchema.extend({
+    limit: limitFieldSchema.default(10),
+    orderBy: z
+        .enum(['start_time', 'activity_score', 'recording_duration', 'duration', 'click_count', 'console_error_count'])
+        .default('start_time'),
+    orderDirection: z.enum(['ASC', 'DESC']).default('DESC'),
+    dateRange: widgetDateRangeSchema,
+})
+
+export type SessionReplayWidgetConfig = z.infer<typeof sessionReplayWidgetConfigSchema>

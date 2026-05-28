@@ -3,12 +3,15 @@ import type { DashboardTile, QueryBasedInsightModel } from '~/types'
 import { dashboardsWidgetsPartialUpdate } from './generated/api'
 import { WidgetConfigValidationError, type WidgetFieldErrors } from './widget_types/widgetConfigValidation'
 import { parseErrorTrackingWidgetConfigApiError } from './widgets/error_tracking/errorTrackingWidgetConfigValidation'
+import { parseSessionReplayWidgetConfigApiError } from './widgets/session_replay/sessionReplayWidgetConfigValidation'
 
 function parseWidgetConfigApiError(widgetType: string, error: unknown): WidgetFieldErrors | null {
     switch (widgetType) {
         case 'error_tracking':
         case 'error_tracking_list':
             return parseErrorTrackingWidgetConfigApiError(error)
+        case 'session_replay_list':
+            return parseSessionReplayWidgetConfigApiError(error)
         default:
             return null
     }
