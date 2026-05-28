@@ -124,6 +124,42 @@ describe('stripFeatureFlagCalledProperties', () => {
         }
     )
 
+    it.each([
+        '$initial_current_url',
+        '$initial_referrer',
+        '$initial_utm_source',
+        '$initial_os',
+        '$initial_geoip_country_code',
+        '$session_entry_url',
+        '$session_entry_utm_campaign',
+        '$session_entry_referring_domain',
+    ])('preserves first-touch / session-entry prefixed key %s', (key) => {
+        const properties: Record<string, any> = { [key]: 'value' }
+
+        stripFeatureFlagCalledProperties(properties)
+
+        expect(properties).toEqual({ [key]: 'value' })
+        expect(mockFlagInc).not.toHaveBeenCalled()
+    })
+
+    it.each([
+        'utm_source',
+        '$referrer',
+        '$referring_domain',
+        '$raw_user_agent',
+        '$os_name',
+        '$device_manufacturer',
+        '$channel_type',
+        '$user_id',
+    ])('preserves standard PostHog auto-captured property %s', (key) => {
+        const properties: Record<string, any> = { [key]: 'value' }
+
+        stripFeatureFlagCalledProperties(properties)
+
+        expect(properties).toEqual({ [key]: 'value' })
+        expect(mockFlagInc).not.toHaveBeenCalled()
+    })
+
     it.each(['environment', 'platform', 'amount', 'plan', 'revenue', 'variant', '$active_feature_flags', 'random_key'])(
         'strips non-whitelisted key %s and increments the counter',
         (key) => {

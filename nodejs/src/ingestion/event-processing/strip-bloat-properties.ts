@@ -2,6 +2,7 @@ import {
     droppedBloatPropertyCounter,
     strippedFeatureFlagCalledPropertyCounter,
 } from '../../worker/ingestion/event-pipeline/metrics'
+import { eventToPersonProperties } from '../../worker/ingestion/persons/person-property-utils'
 
 // Persistence cache keys that leak from older posthog-js versions into event
 // payloads. The SDK stopped sending these in posthog-js#3392; this server-side
@@ -24,15 +25,19 @@ export function stripBloatProperties(properties: Record<string, any>): void {
 
 export const FEATURE_FLAG_CALLED_EVENT = '$feature_flag_called' as const
 
+// Prefixes whose keys are always preserved on `$feature_flag_called`. Each names
+// an open-ended PostHog property family: `$feature/<flag-key>` (one per evaluated
+// flag, server SDKs), `$initial_<prop>` (first-touch super-properties), and
+// `$session_entry_<prop>` (session entry-point context).
+export const FEATURE_FLAG_CALLED_KEEP_PREFIXES: readonly string[] = ['$feature/', '$initial_', '$session_entry_']
+
 // Allowed property keys on `$feature_flag_called` events. The event is
 // SDK-emitted with a fixed schema, but SDKs' cross-cutting methods (`register`,
 // super-properties) leak unrelated keys onto it. PostHog owns this event's
 // schema, so we strip non-whitelisted keys before ClickHouse persistence.
 // Compiled from auditing all PostHog SDKs plus a `system.query_log` audit of
 // actively-used insights/cohorts referencing `$feature_flag_called`.
-// Additionally, any key matching the `$feature/` prefix is preserved — server
-// SDKs emit one `$feature/<flag-key>: <value>` property per evaluated flag.
-export const FEATURE_FLAG_CALLED_KEEP: ReadonlySet<string> = new Set([
+export const FEATURE_FLAG_CALLED_KEEP: ReadonlySet<string> = new Set<string>([
     // Flag-specific (SDK audit)
     '$feature_flag',
     '$feature_flag_response',
@@ -108,6 +113,26 @@ export const FEATURE_FLAG_CALLED_KEEP: ReadonlySet<string> = new Set([
     '$group_2',
     '$group_3',
     '$group_4',
+
+    // Standard PostHog auto-captured / super-properties (campaign + UTM, web and
+    // mobile device, OS, referrer, screen/viewport, raw user agent). Reused from
+    // the canonical person-property mapping list so the two stay in sync. Their
+    // `$initial_*` first-touch variants are kept via FEATURE_FLAG_CALLED_KEEP_PREFIXES.
+    ...eventToPersonProperties,
+
+    // Standard properties not in the person-mapping list above.
+    '$user_id',
+    '$anon_distinct_id',
+    '$device',
+    '$device_name',
+    '$device_model',
+    '$device_manufacturer',
+    '$channel_type',
+    '$event_type',
+    '$session_duration',
+    '$start_timestamp',
+    '$entry_current_url',
+    '$pageview_id',
 ])
 
 // Strips non-whitelisted keys and returns the property count seen before stripping.
@@ -118,7 +143,7 @@ export function stripFeatureFlagCalledProperties(properties: Record<string, any>
         if (FEATURE_FLAG_CALLED_KEEP.has(key)) {
             continue
         }
-        if (key.startsWith('$feature/')) {
+        if (FEATURE_FLAG_CALLED_KEEP_PREFIXES.some((prefix) => key.startsWith(prefix))) {
             continue
         }
         delete properties[key]
