@@ -2526,13 +2526,21 @@ export const dashboardLogic = kea<dashboardLogicType>([
                 return
             }
             try {
-                const response = await updateDashboardWidgetTileConfig({
+                const updatedTile = await updateDashboardWidgetTileConfig({
                     teamId: teamLogic.values.currentTeamId!,
                     dashboardId: values.dashboard.id,
                     tile,
                     config,
                 })
-                dashboardsModel.actions.updateDashboardSuccess(response)
+                const dashboard = getQueryBasedDashboard({
+                    ...values.dashboard,
+                    tiles: values.dashboard.tiles.map((existingTile) =>
+                        existingTile.id === tile.id ? { ...existingTile, ...updatedTile } : existingTile
+                    ),
+                })
+                if (dashboard) {
+                    dashboardsModel.actions.updateDashboardSuccess(dashboard)
+                }
                 actions.refreshDashboardWidgets({ tileIds: [tile.id], forceRefresh: true })
             } catch (e) {
                 if (isWidgetConfigValidationError(e)) {
