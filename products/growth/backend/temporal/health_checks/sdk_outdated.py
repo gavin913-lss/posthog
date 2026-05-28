@@ -21,7 +21,7 @@ from products.growth.backend.constants import (
 )
 from products.growth.backend.sdk_health import SdkAssessment, _is_safe_for_interpolation, compute_sdk_health
 
-# Issue severity follows the SDK Doctor assessment severity: a single outdated SDK is a warning,
+# Issue severity follows the SDK Health assessment severity: a single outdated SDK is a warning,
 # but when the bulk of a team's SDKs are outdated the assessment escalates to "danger".
 _SEVERITY_BY_ASSESSMENT: dict[str, HealthIssue.Severity] = {
     "danger": HealthIssue.Severity.CRITICAL,
@@ -75,7 +75,7 @@ def _load_github_sdk_data() -> dict[str, dict]:
 
 
 def _cache_team_sdk_data(team_sdk_data: dict[int, dict[str, list[SdkVersionEntry]]]) -> None:
-    """Cache team SDK version data in Redis for the SDK Doctor API."""
+    """Cache team SDK version data in Redis for the SDK Health API."""
     if not team_sdk_data:
         return
 
@@ -101,7 +101,7 @@ class SdkOutdatedCheck(HealthCheck):
         latest = issue.payload.get("latest_version") or "the latest version"
         # `current_version` originates from the $lib_version event property — attacker
         # controllable via project token. Gate it through the same allowlist used
-        # by SDK Doctor before interpolating into a string we forward to alert
+        # by SDK Health before interpolating into a string we forward to alert
         # destinations (Slack, email, webhooks).
         raw_current = issue.payload.get("current_version")
         current = raw_current if raw_current and _is_safe_for_interpolation(raw_current) else None
@@ -109,7 +109,7 @@ class SdkOutdatedCheck(HealthCheck):
         return AlertContent(
             title=f"{sdk_name} SDK is outdated",
             summary=summary,
-            link="/health/sdk-doctor",
+            link="/health/sdk-health",
         )
 
     def detect(self, team_ids: list[int]) -> dict[int, list[HealthCheckResult]]:
@@ -139,7 +139,7 @@ class SdkOutdatedCheck(HealthCheck):
 
         _cache_team_sdk_data({tid: dict(sdk_data) for tid, sdk_data in team_sdk_data.items()})
 
-        # Run the same outdatedness heuristics the SDK Doctor UI shows (grace periods, device
+        # Run the same outdatedness heuristics the SDK Health UI shows (grace periods, device
         # thresholds, traffic-share rules, team-level severity escalation) so alerts match the UI
         # instead of firing on every non-latest version.
         issues: defaultdict[int, list[HealthCheckResult]] = defaultdict(list)

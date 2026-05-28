@@ -54,7 +54,7 @@ class Product(StrEnum):
     PRODUCT_ANALYTICS = "product_analytics"
     REPLAY = "replay"
     REVENUE_ANALYTICS = "revenue_analytics"
-    SDK_DOCTOR = "sdk_doctor"
+    SDK_HEALTH = "sdk_health"
     SESSION_SUMMARY = "session_summary"
     SIGNALS = "signals"
     SURVEYS = "surveys"
