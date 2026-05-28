@@ -1750,10 +1750,21 @@ export const sqlEditorLogic = kea<sqlEditorLogicType>([
                     dashboardId: undefined,
                 })
                 if (loadedLogic) {
-                    loadedLogic.actions.setInsight(savedInsight, {
-                        overrideQuery: true,
-                        fromPersistentApi: true,
-                    })
+                    // The PATCH response doesn't include computed results for query-based
+                    // insights, so fall back to the freshly-run result from the editor's
+                    // data node — otherwise the view keeps showing the pre-edit cached
+                    // results until the user reloads the page.
+                    const editorResponse = dataNodeLogic.findMounted({
+                        key: values.dataLogicKey,
+                    })?.values.response
+                    const result = savedInsight.result ?? editorResponse ?? null
+                    loadedLogic.actions.setInsight(
+                        { ...savedInsight, result },
+                        {
+                            overrideQuery: true,
+                            fromPersistentApi: true,
+                        }
+                    )
                 }
 
                 const dashboardId = values.dashboardId
