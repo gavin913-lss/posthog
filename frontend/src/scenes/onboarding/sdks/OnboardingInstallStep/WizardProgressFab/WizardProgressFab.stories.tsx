@@ -6,9 +6,9 @@ import { FEATURE_FLAGS } from 'lib/constants'
 
 import { wizardSessionStreamLogic } from 'products/wizard/frontend/wizardSessionStreamLogic'
 
-import { WIZARD_SKILL_IDS } from '../skillBadge'
-import { WizardProgressFab } from './WizardProgressFab'
-import { wizardProgressTrackerLogic } from './wizardProgressTrackerLogic'
+import { WizardProgressFab } from '.'
+import { WIZARD_SKILL_IDS } from '../../skillBadge'
+import { wizardProgressTrackerLogic } from '../wizardProgressTrackerLogic'
 
 const WORKFLOW_ID = 'posthog-integration'
 const DEFAULT_SKILL_ID = 'laravel'

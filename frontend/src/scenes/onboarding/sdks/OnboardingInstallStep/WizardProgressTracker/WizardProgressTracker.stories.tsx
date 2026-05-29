@@ -9,9 +9,9 @@ import { Logomark } from 'lib/brand/Logomark'
 
 import { wizardSessionStreamLogic } from 'products/wizard/frontend/wizardSessionStreamLogic'
 
-import { WIZARD_SKILL_IDS } from '../skillBadge'
-import { WizardProgressTracker } from './WizardProgressTracker'
-import { wizardProgressTrackerLogic } from './wizardProgressTrackerLogic'
+import { WizardProgressTracker } from '.'
+import { WIZARD_SKILL_IDS } from '../../skillBadge'
+import { wizardProgressTrackerLogic } from '../wizardProgressTrackerLogic'
 
 const WORKFLOW_ID = 'posthog-integration'
 const DEFAULT_SKILL_ID = 'laravel'

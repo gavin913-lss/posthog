@@ -1,12 +1,12 @@
 import { useActions, useValues } from 'kea'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect } from 'react'
 
 import { LemonBanner } from '@posthog/lemon-ui'
 
-import { SkillBadge } from '../skillBadge'
-import { type DisplayState, wizardProgressTrackerLogic } from './wizardProgressTrackerLogic'
-
-const AUTO_ADVANCE_SECONDS = 5
+import { SkillBadge } from '../../skillBadge'
+import { wizardProgressTrackerLogic } from '../wizardProgressTrackerLogic'
+import { AutoAdvanceCountdown } from './AutoAdvanceCountdown'
+import { AUTO_ADVANCE_SECONDS, bannerTypeFor, headlineFor, subLineFor } from './helpers'
 
 /**
  * Inline confirmation card shown on the install step once a wizard session exists.
@@ -61,37 +61,6 @@ export function WizardProgressTracker({ onAutoAdvance }: { onAutoAdvance?: () =>
     )
 }
 
-function AutoAdvanceCountdown({
-    durationSeconds,
-    onAdvance,
-}: {
-    durationSeconds: number
-    onAdvance: () => void
-}): JSX.Element {
-    const [remaining, setRemaining] = useState(durationSeconds)
-    // Belt-and-suspenders: navigation usually unmounts us, but during the brief window
-    // before the next scene takes over we may re-render — guard so we only fire once.
-    const firedRef = useRef(false)
-
-    useEffect(() => {
-        if (remaining <= 0) {
-            if (!firedRef.current) {
-                firedRef.current = true
-                onAdvance()
-            }
-            return
-        }
-        const id = window.setTimeout(() => setRemaining((r) => r - 1), 1000)
-        return () => window.clearTimeout(id)
-    }, [remaining, onAdvance])
-
-    return (
-        <div className="text-xs text-muted tabular-nums shrink-0">
-            {remaining > 0 ? `Continuing in ${remaining}s…` : 'Continuing…'}
-        </div>
-    )
-}
-
 /**
  * Used by the parent variant to decide whether to render the takeover at all.
  * Mounts the logic on first call. Returns `true` once we have observed a
@@ -100,38 +69,4 @@ function AutoAdvanceCountdown({
 export function useWizardTakeoverActive(): boolean {
     const { displayState, sessionIsCurrent } = useValues(wizardProgressTrackerLogic)
     return displayState !== 'preTakeover' && sessionIsCurrent
-}
-
-function bannerTypeFor(state: DisplayState): 'ai' | 'success' | 'error' {
-    if (state === 'completed') {
-        return 'success'
-    }
-    if (state === 'error') {
-        return 'error'
-    }
-    return 'ai'
-}
-
-function headlineFor(state: DisplayState): string {
-    switch (state) {
-        case 'completed':
-            return 'PostHog is set up.'
-        case 'error':
-            return 'The wizard hit a snag.'
-        case 'connecting':
-            return 'Reconnecting to the wizard…'
-        default:
-            return 'The wizard is running for you.'
-    }
-}
-
-function subLineFor(state: DisplayState): string {
-    switch (state) {
-        case 'completed':
-            return 'Hit Continue below to finish onboarding.'
-        case 'connecting':
-            return 'restoring connection — your run is still going'
-        default:
-            return 'usually 5–10 minutes · watch progress in the corner'
-    }
 }
