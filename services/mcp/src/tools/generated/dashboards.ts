@@ -6,6 +6,8 @@ import {
     DashboardsCopyTileCreateBody,
     DashboardsCopyTileCreateParams,
     DashboardsCreateBody,
+    DashboardsCreateTextTileCreateBody,
+    DashboardsCreateTextTileCreateParams,
     DashboardsDestroyParams,
     DashboardsListQueryParams,
     DashboardsMoveTilePartialUpdateBody,
@@ -20,6 +22,8 @@ import {
     DashboardsRunInsightsRetrieveQueryParams,
     DashboardsRunWidgetsRetrieveParams,
     DashboardsRunWidgetsRetrieveQueryParams,
+    DashboardsUpdateTextTileCreateBody,
+    DashboardsUpdateTextTileCreateParams,
     DashboardsWidgetsBatchCreateBody,
     DashboardsWidgetsBatchCreateParams,
     DashboardsWidgetsCreateBody,
@@ -117,6 +121,37 @@ const dashboardCreate = (): ToolBase<typeof DashboardCreateSchema, WithPostHogUr
             'tiles.*.insight.resolved_date_range',
         ]) as typeof result
         return await withPostHogUrl(context, filtered, `/dashboard/${filtered.id}`)
+    },
+})
+
+const DashboardCreateTextTileSchema = DashboardsCreateTextTileCreateParams.omit({ project_id: true })
+    .extend(DashboardsCreateTextTileCreateBody.shape)
+    .extend({ id: z.preprocess(castStringToInt, DashboardsCreateTextTileCreateParams.shape['id']) })
+
+const dashboardCreateTextTile = (): ToolBase<
+    typeof DashboardCreateTextTileSchema,
+    WithPostHogUrl<Schemas.DashboardTile>
+> => ({
+    name: 'dashboard-create-text-tile',
+    schema: DashboardCreateTextTileSchema,
+    handler: async (context: Context, params: z.infer<typeof DashboardCreateTextTileSchema>) => {
+        const projectId = await context.stateManager.getProjectId()
+        const body: Record<string, unknown> = {}
+        if (params.body !== undefined) {
+            body['body'] = params.body
+        }
+        if (params.layouts !== undefined) {
+            body['layouts'] = params.layouts
+        }
+        if (params.color !== undefined) {
+            body['color'] = params.color
+        }
+        const result = await context.api.request<Schemas.DashboardTile>({
+            method: 'POST',
+            path: `/api/projects/${encodeURIComponent(String(projectId))}/dashboards/${encodeURIComponent(String(params.id))}/create_text_tile/`,
+            body,
+        })
+        return await withPostHogUrl(context, result, `/dashboard/${params.id}`)
     },
 })
 
@@ -263,6 +298,9 @@ const dashboardReorderTiles = (): ToolBase<typeof DashboardReorderTilesSchema, W
         if (params.tile_order !== undefined) {
             body['tile_order'] = params.tile_order
         }
+        if (params.layout !== undefined) {
+            body['layout'] = params.layout
+        }
         const result = await context.api.request<Schemas.Dashboard>({
             method: 'POST',
             path: `/api/projects/${encodeURIComponent(String(projectId))}/dashboards/${encodeURIComponent(String(params.id))}/reorder_tiles/`,
@@ -383,6 +421,40 @@ const dashboardUpdate = (): ToolBase<typeof DashboardUpdateSchema, WithPostHogUr
             'tiles.*.insight.resolved_date_range',
         ]) as typeof result
         return await withPostHogUrl(context, filtered, `/dashboard/${filtered.id}`)
+    },
+})
+
+const DashboardUpdateTextTileSchema = DashboardsUpdateTextTileCreateParams.omit({ project_id: true })
+    .extend(DashboardsUpdateTextTileCreateBody.shape)
+    .extend({ id: z.preprocess(castStringToInt, DashboardsUpdateTextTileCreateParams.shape['id']) })
+
+const dashboardUpdateTextTile = (): ToolBase<
+    typeof DashboardUpdateTextTileSchema,
+    WithPostHogUrl<Schemas.DashboardTile>
+> => ({
+    name: 'dashboard-update-text-tile',
+    schema: DashboardUpdateTextTileSchema,
+    handler: async (context: Context, params: z.infer<typeof DashboardUpdateTextTileSchema>) => {
+        const projectId = await context.stateManager.getProjectId()
+        const body: Record<string, unknown> = {}
+        if (params.tile_id !== undefined) {
+            body['tile_id'] = params.tile_id
+        }
+        if (params.body !== undefined) {
+            body['body'] = params.body
+        }
+        if (params.layouts !== undefined) {
+            body['layouts'] = params.layouts
+        }
+        if (params.color !== undefined) {
+            body['color'] = params.color
+        }
+        const result = await context.api.request<Schemas.DashboardTile>({
+            method: 'POST',
+            path: `/api/projects/${encodeURIComponent(String(projectId))}/dashboards/${encodeURIComponent(String(params.id))}/update_text_tile/`,
+            body,
+        })
+        return await withPostHogUrl(context, result, `/dashboard/${params.id}`)
     },
 })
 
@@ -578,8 +650,8 @@ const dashboardsMoveTilePartialUpdate = (): ToolBase<
     handler: async (context: Context, params: z.infer<typeof DashboardsMoveTilePartialUpdateSchema>) => {
         const projectId = await context.stateManager.getProjectId()
         const body: Record<string, unknown> = {}
-        if (params.toDashboard !== undefined) {
-            body['toDashboard'] = params.toDashboard
+        if (params.to_dashboard !== undefined) {
+            body['to_dashboard'] = params.to_dashboard
         }
         if (params.tile !== undefined) {
             body['tile'] = params.tile
@@ -595,12 +667,14 @@ const dashboardsMoveTilePartialUpdate = (): ToolBase<
 
 export const GENERATED_TOOLS: Record<string, () => ToolBase<ZodObjectAny>> = {
     'dashboard-create': dashboardCreate,
+    'dashboard-create-text-tile': dashboardCreateTextTile,
     'dashboard-delete': dashboardDelete,
     'dashboard-get': dashboardGet,
     'dashboard-insights-run': dashboardInsightsRun,
     'dashboard-reorder-tiles': dashboardReorderTiles,
     'dashboard-tile-copy': dashboardTileCopy,
     'dashboard-update': dashboardUpdate,
+    'dashboard-update-text-tile': dashboardUpdateTextTile,
     'dashboard-widget-add': dashboardWidgetAdd,
     'dashboard-widget-catalog-list': dashboardWidgetCatalogList,
     'dashboard-widget-update': dashboardWidgetUpdate,

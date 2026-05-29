@@ -16,7 +16,7 @@
             "required": ["id"],
             "type": "object"
         },
-        "toDashboard": {
+        "to_dashboard": {
             "description": "Destination dashboard ID.",
             "type": "number"
         }
