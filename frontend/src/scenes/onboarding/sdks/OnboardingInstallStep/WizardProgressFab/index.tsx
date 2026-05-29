@@ -1,3 +1,5 @@
+import './WizardProgressFab.scss'
+
 import { useActions, useValues } from 'kea'
 import { useState } from 'react'
 
@@ -7,22 +9,9 @@ import { useFeatureFlag } from 'lib/hooks/useFeatureFlag'
 
 import { wizardProgressTrackerLogic } from '../wizardProgressTrackerLogic'
 import { ExpandedDetails } from './ExpandedDetails'
-import { FabKeyframes } from './FabKeyframes'
 import { headlineFor, simulatedTaskFraction, subLineFor } from './helpers'
 import { ProgressRing } from './ProgressRing'
 
-/**
- * Persistent corner widget that surfaces an in-flight wizard run while the user
- * navigates the rest of the app. Disappears when the install step's inline
- * confirmation card is mounted, when the user dismisses a terminal run, or when
- * we haven't observed a recent wizard session (see `sessionIsCurrent`).
- *
- * Click the header to expand the card inline — the expanded view shows the live
- * task list with per-task elapsed times. Clicking again collapses it.
- *
- * Gated on the same flag as the takeover panel so control-arm users don't mount
- * the sync logic (and open an SSE connection) at the scene level.
- */
 export function WizardProgressFab(): JSX.Element | null {
     const isSyncEnabled = useFeatureFlag('ONBOARDING_WIZARD_SYNC', 'test')
     if (!isSyncEnabled) {
@@ -63,7 +52,6 @@ function WizardProgressFabInner(): JSX.Element | null {
 
     return (
         <div className="fixed bottom-5 right-5 z-[60] wizard-fab-slide-in">
-            <FabKeyframes />
             <div
                 role="status"
                 aria-live="polite"

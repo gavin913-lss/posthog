@@ -51,11 +51,16 @@ export function subLineFor(state: DisplayState, currentTask: string | undefined,
     return 'connecting...'
 }
 
-export function accentColor(state: DisplayState): string {
+/**
+ * Tailwind text-color class for the ring's accent. The ring uses
+ * `stroke="currentColor"` on its SVG circles + the center glyph, so the whole
+ * widget picks up its tone from a single class on the wrapping element.
+ */
+export function ringToneClass(state: DisplayState): string {
     if (state === 'completed') {
-        return 'rgb(16, 185, 129)' // emerald-500
+        return 'text-success'
     }
-    return 'rgb(245, 78, 0)' // brand-red — used for running, connecting, and error
+    return 'text-brand-red'
 }
 
 export function formatElapsed(seconds: number): string {

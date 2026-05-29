@@ -1,5 +1,5 @@
 import { type DisplayState } from '../wizardProgressTrackerLogic'
-import { accentColor } from './helpers'
+import { ringToneClass } from './helpers'
 
 const RING_SIZE = 44
 const RING_STROKE = 4
@@ -21,15 +21,12 @@ export function ProgressRing({
     state: DisplayState
     hasTasks: boolean
 }): JSX.Element {
-    const accent = accentColor(state)
     const isIndeterminate = state === 'connecting' || (state === 'running' && !hasTasks)
     const dashOffset = RING_CIRCUMFERENCE * (1 - progress / 100)
+    const toneClass = ringToneClass(state)
 
     return (
-        <div
-            className="relative shrink-0 flex items-center justify-center"
-            style={{ width: RING_SIZE, height: RING_SIZE }}
-        >
+        <div className="wizard-fab-ring relative shrink-0 flex items-center justify-center">
             <svg width={RING_SIZE} height={RING_SIZE} viewBox={`0 0 ${RING_SIZE} ${RING_SIZE}`}>
                 <circle
                     cx={RING_SIZE / 2}
@@ -41,13 +38,14 @@ export function ProgressRing({
                     strokeWidth={RING_STROKE}
                 />
                 {isIndeterminate ? (
-                    <g className="wizard-fab-ring-spin" style={{ transformOrigin: '50% 50%' }}>
+                    <g className="wizard-fab-ring-spin">
                         <circle
                             cx={RING_SIZE / 2}
                             cy={RING_SIZE / 2}
                             r={RING_RADIUS}
                             fill="none"
-                            stroke={accent}
+                            stroke="currentColor"
+                            className={toneClass}
                             strokeWidth={RING_STROKE}
                             strokeLinecap="round"
                             strokeDasharray={`${RING_CIRCUMFERENCE * 0.25} ${RING_CIRCUMFERENCE}`}
@@ -60,18 +58,18 @@ export function ProgressRing({
                         cy={RING_SIZE / 2}
                         r={RING_RADIUS}
                         fill="none"
-                        stroke={accent}
+                        stroke="currentColor"
+                        className={`wizard-fab-ring-progress ${toneClass}`}
                         strokeWidth={RING_STROKE}
                         strokeLinecap="round"
                         strokeDasharray={RING_CIRCUMFERENCE}
                         strokeDashoffset={dashOffset}
                         transform={`rotate(-90 ${RING_SIZE / 2} ${RING_SIZE / 2})`}
-                        style={{ transition: 'stroke-dashoffset 600ms ease-out' }}
                     />
                 )}
             </svg>
             <span className="absolute inset-0 flex items-center justify-center text-[11px] font-semibold tabular-nums">
-                <RingCenter state={state} progress={progress} hasTasks={hasTasks} accent={accent} />
+                <RingCenter state={state} progress={progress} hasTasks={hasTasks} toneClass={toneClass} />
             </span>
         </div>
     )
@@ -85,23 +83,23 @@ function RingCenter({
     state,
     progress,
     hasTasks,
-    accent,
+    toneClass,
 }: {
     state: DisplayState
     progress: number
     hasTasks: boolean
-    accent: string
+    toneClass: string
 }): JSX.Element {
     if (state === 'completed') {
         return (
-            <span style={{ color: accent }} aria-hidden>
+            <span className={toneClass} aria-hidden>
                 ✓
             </span>
         )
     }
     if (state === 'error') {
         return (
-            <span style={{ color: accent }} aria-hidden>
+            <span className={toneClass} aria-hidden>
                 ✗
             </span>
         )
@@ -109,5 +107,5 @@ function RingCenter({
     if (state === 'connecting' || !hasTasks) {
         return <span aria-hidden />
     }
-    return <span style={{ color: accent }}>{`${progress}%`}</span>
+    return <span className={toneClass}>{`${progress}%`}</span>
 }
