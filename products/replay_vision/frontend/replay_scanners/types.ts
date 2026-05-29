@@ -144,6 +144,7 @@ export interface MonitorScannerConfig {
 export interface SummarizerScannerConfig {
     prompt: string
     length: 'short' | 'medium' | 'long'
+    emits_embeddings: boolean
 }
 
 export interface ClassifierScannerConfig {
@@ -160,6 +161,7 @@ export interface ScorerScannerConfig {
 
 export interface IndexerScannerConfig {
     prompt: string
+    emits_embeddings: boolean
 }
 
 export type ScannerConfig =
