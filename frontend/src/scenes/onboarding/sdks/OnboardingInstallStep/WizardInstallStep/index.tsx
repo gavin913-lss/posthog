@@ -2,6 +2,8 @@ import { useActions, useValues } from 'kea'
 
 import { LemonButton, LemonModal } from '@posthog/lemon-ui'
 
+import { useFeatureFlag } from 'lib/hooks/useFeatureFlag'
+
 import { OnboardingStepKey, type SDK } from '~/types'
 
 import { OnboardingStep } from '../../../OnboardingStep'
@@ -11,7 +13,7 @@ import { SDKInstructionsModal } from '../SDKInstructionsModal'
 import { VariantProps } from '../types'
 import { WizardCommandBlock } from '../WizardCommandBlock'
 import { wizardInstallStepLogic } from '../wizardInstallStepLogic'
-import { WizardProgressTracker } from '../WizardProgressTracker'
+import { WizardProgressTracker, useWizardTakeoverActive } from '../WizardProgressTracker'
 import { WizardInstallIntro } from './WizardInstallIntro'
 
 /**
@@ -22,19 +24,81 @@ import { WizardInstallIntro } from './WizardInstallIntro'
  * picking an SDK in the manual modal closes it and opens the instructions
  * modal; closing the instructions modal reopens manual setup. The shared modal
  * in the parent OnboardingInstallStep is skipped here.
+ *
+ * Sync features (live wizard takeover banner, Continue-unblock on session) are
+ * gated on `ONBOARDING_WIZARD_SYNC=test` so the kea logic and its SSE only
+ * mount for the test arm.
  */
-export function WizardInstallStep({
-    sdkGridProps,
-    sdkInstructionMap,
-    adblockResult,
-    installationComplete,
-    listeningForName,
-    teamPropertyToVerify,
-    selectedSDK,
-    header,
-}: VariantProps): JSX.Element {
-    const { manualModalOpen, sdkInstructionsOpen, isTakeoverActive } = useValues(wizardInstallStepLogic)
+export function WizardInstallStep(props: VariantProps): JSX.Element {
+    const isSyncEnabled = useFeatureFlag('ONBOARDING_WIZARD_SYNC', 'test')
+    return isSyncEnabled ? <WizardInstallStepWithSync {...props} /> : <WizardInstallStepStatic {...props} />
+}
+
+function WizardInstallStepStatic(props: VariantProps): JSX.Element {
+    const continueDisabledReason = props.installationComplete ? undefined : 'Installation is not complete'
+    return (
+        <WizardInstallShell
+            continueDisabledReason={continueDisabledReason}
+            showSkip={!props.installationComplete}
+            props={props}
+        >
+            <WizardInstallIntro />
+            <div className="max-w-xl mx-auto">
+                <WizardCommandBlock />
+            </div>
+        </WizardInstallShell>
+    )
+}
+
+function WizardInstallStepWithSync(props: VariantProps): JSX.Element {
+    const isTakeoverActive = useWizardTakeoverActive()
+    // Once the wizard is in flight, trust it — installation events aren't required
+    // to unblock Continue.
+    const continueDisabledReason =
+        isTakeoverActive || props.installationComplete ? undefined : 'Installation is not complete'
+    return (
+        <WizardInstallShell
+            continueDisabledReason={continueDisabledReason}
+            showSkip={!props.installationComplete && !isTakeoverActive}
+            props={props}
+        >
+            {isTakeoverActive ? (
+                <WizardProgressTracker />
+            ) : (
+                <>
+                    <WizardInstallIntro />
+                    <div className="max-w-xl mx-auto">
+                        <WizardCommandBlock />
+                    </div>
+                </>
+            )}
+        </WizardInstallShell>
+    )
+}
+
+function WizardInstallShell({
+    children,
+    continueDisabledReason,
+    showSkip,
+    props,
+}: {
+    children: React.ReactNode
+    continueDisabledReason: string | undefined
+    showSkip: boolean
+    props: VariantProps
+}): JSX.Element {
+    const { manualModalOpen, sdkInstructionsOpen } = useValues(wizardInstallStepLogic)
     const { setManualModalOpen, setSdkInstructionsOpen } = useActions(wizardInstallStepLogic)
+    const {
+        sdkGridProps,
+        sdkInstructionMap,
+        adblockResult,
+        installationComplete,
+        listeningForName,
+        teamPropertyToVerify,
+        selectedSDK,
+        header,
+    } = props
 
     const handleManualSDKClick = (sdk: SDK): void => {
         sdkGridProps.onSDKClick(sdk)
@@ -42,16 +106,12 @@ export function WizardInstallStep({
         setSdkInstructionsOpen(true)
     }
 
-    // While the wizard is in flight, trust it and let the user proceed —
-    // installation events aren't required to unblock Continue.
-    const continueDisabledReason = isTakeoverActive || installationComplete ? undefined : 'Installation is not complete'
-
     return (
         <OnboardingStep
             title="Install"
             stepKey={OnboardingStepKey.INSTALL}
             continueDisabledReason={continueDisabledReason}
-            showSkip={!installationComplete && !isTakeoverActive}
+            showSkip={showSkip}
             actions={
                 <div className="pr-2">
                     <RealtimeCheckIndicator
@@ -64,17 +124,7 @@ export function WizardInstallStep({
             {header}
             {!installationComplete && <AdblockWarning adblockResult={adblockResult} />}
             <div className="mt-6 space-y-8">
-                {isTakeoverActive ? (
-                    <WizardProgressTracker />
-                ) : (
-                    <>
-                        <WizardInstallIntro />
-                        <div className="max-w-xl mx-auto">
-                            <WizardCommandBlock />
-                        </div>
-                    </>
-                )}
-
+                {children}
                 <div className="text-center">
                     <LemonButton type="tertiary" size="small" onClick={() => setManualModalOpen(true)}>
                         Need to set up manually?

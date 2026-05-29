@@ -48,7 +48,7 @@ export function subLineFor(state: DisplayState, currentTask: string | undefined,
     if (currentTask) {
         return `${currentTask} · ${elapsed}`
     }
-    return 'connecting...'
+    return 'analyzing your project...'
 }
 
 /**

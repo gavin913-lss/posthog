@@ -121,31 +121,70 @@ export function SkillBadge({
     const displayName = sdk?.name ?? getSkillDisplayName(skillId)
     return (
         <span className={`inline-flex items-center gap-1.5 ${className ?? ''}`.trim()}>
-            <SkillLogo sdk={sdk} alt={`${displayName} logo`} size={size} />
+            <SkillLogoImage sdk={sdk} alt={`${displayName} logo`} size={size} />
             <span>{displayName}</span>
         </span>
     )
 }
 
-function SkillLogo({ sdk, alt, size }: { sdk: SDK | null; alt: string; size: number }): JSX.Element {
+/**
+ * Just the logo — useful when the framework name is in the surrounding copy and
+ * the inline `SkillBadge` wrapper would be redundant.
+ */
+export function SkillLogo({
+    skillId,
+    size = 16,
+    className,
+}: {
+    skillId: string
+    size?: number
+    className?: string
+}): JSX.Element {
+    const sdk = findSdkByKey(skillId)
+    const displayName = sdk?.name ?? getSkillDisplayName(skillId)
+    return <SkillLogoImage sdk={sdk} alt={`${displayName} logo`} size={size} className={className} />
+}
+
+function SkillLogoImage({
+    sdk,
+    alt,
+    size,
+    className,
+}: {
+    sdk: SDK | null
+    alt: string
+    size: number
+    className?: string
+}): JSX.Element {
     const sizeStyle = { width: size, height: size }
+    const extra = className ?? ''
     if (!sdk) {
         return (
-            <span style={sizeStyle} className="inline-flex items-center justify-center text-muted shrink-0">
+            <span
+                style={sizeStyle}
+                className={`inline-flex items-center justify-center text-muted shrink-0 ${extra}`.trim()}
+            >
                 <IconCode style={sizeStyle} aria-hidden />
             </span>
         )
     }
     const image = sdk.image
     if (typeof image === 'string') {
-        return <img src={image} alt={alt} style={sizeStyle} className="object-contain shrink-0" />
+        return <img src={image} alt={alt} style={sizeStyle} className={`object-contain shrink-0 ${extra}`.trim()} />
     }
     if (typeof image === 'object' && image !== null && 'default' in image) {
-        return <img src={image.default} alt={alt} style={sizeStyle} className="object-contain shrink-0" />
+        return (
+            <img
+                src={image.default}
+                alt={alt}
+                style={sizeStyle}
+                className={`object-contain shrink-0 ${extra}`.trim()}
+            />
+        )
     }
     // React element (custom logo component). It draws into its own container; constrain via CSS.
     return (
-        <span style={sizeStyle} className="inline-flex items-center justify-center shrink-0">
+        <span style={sizeStyle} className={`inline-flex items-center justify-center shrink-0 ${extra}`.trim()}>
             {image}
         </span>
     )
