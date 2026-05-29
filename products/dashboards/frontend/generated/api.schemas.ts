@@ -7473,7 +7473,7 @@ export interface MoveTileTileApi {
 
 export interface PatchedMoveTileRequestApi {
     /** Destination dashboard ID. */
-    to_dashboard?: number
+    toDashboard?: number
     /** Tile to move, identified by its dashboard tile ID. */
     tile?: MoveTileTileApi
 }
@@ -7574,11 +7574,11 @@ export interface UpdateTextTileRequestApi {
 
 export interface AddDashboardWidgetRequestApi {
     /**
-     * Widget type identifier. Supported values: error_tracking, error_tracking_list. Use dashboard-widget-catalog-list for config_schema_hints per type.
+     * Widget type identifier from dashboard-widget-catalog-list.
      * @maxLength 64
      */
     widget_type: string
-    /** Widget-specific configuration JSON. Shape depends on widget_type; see config_schema_hints in dashboard-widget-catalog-list (currently: error_tracking_list). */
+    /** Widget-specific configuration JSON. Shape depends on widget_type; see config_schema_hints in dashboard-widget-catalog-list. */
     config: unknown
     /**
      * Optional custom display name for the widget tile.
@@ -7595,7 +7595,7 @@ export interface AddDashboardWidgetRequestApi {
 }
 
 export interface PatchedUpdateDashboardWidgetRequestApi {
-    /** Updated widget configuration JSON. Validated for the tile's widget_type; see config_schema_hints in dashboard-widget-catalog-list. */
+    /** Updated widget configuration JSON. Validated for the tile's widget_type. */
     config?: unknown
     /**
      * Optional custom display name for the widget tile.
