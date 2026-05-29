@@ -2,11 +2,13 @@ import { router } from 'kea-router'
 import { expectLogic, partial } from 'kea-test-utils'
 
 import { databaseTableListLogic } from 'scenes/data-management/database/databaseTableListLogic'
+import { consumeRecentlyUpdatedInsight } from 'scenes/insights/recentlyUpdatedInsights'
 import { sceneLogic } from 'scenes/sceneLogic'
 import { teamLogic } from 'scenes/teamLogic'
 import { urls } from 'scenes/urls'
 
 import { useMocks } from '~/mocks/jest'
+import { dataNodeLogic } from '~/queries/nodes/DataNode/dataNodeLogic'
 import { dataVisualizationLogic } from '~/queries/nodes/DataVisualization/dataVisualizationLogic'
 import * as queryRunner from '~/queries/query'
 import {
@@ -132,6 +134,15 @@ const MOCK_DRAFT = {
     saved_query_id: MOCK_VIEW.id,
 } as any
 
+// A freshly-run HogQL response as it lives on the editor's dataNodeLogic. The SQL
+// visualization reads the row data from `results` (plural).
+const MOCK_EDITOR_RESPONSE = {
+    results: [[42]],
+    columns: ['count()'],
+    types: ['UInt64'],
+    hogql: 'SELECT count() FROM events',
+} as any
+
 function createMockMonaco(): any {
     const mockModel = {
         getValue: () => '',
@@ -200,6 +211,10 @@ describe('sqlEditorLogic', () => {
             },
             patch: {
                 '/api/user_home_settings/@me/': [200],
+                '/api/environments/:team_id/insights/:id/': (req) => {
+                    const body = req.body as Partial<QueryBasedInsightModel>
+                    return [200, { ...MOCK_INSIGHT, ...body, result: null }]
+                },
             },
             delete: {
                 '/api/environments/:team_id/query/:id/': [204],
@@ -824,6 +839,49 @@ describe('sqlEditorLogic', () => {
 
             expect(logic.values.activeTab?.name).toEqual('Untitled')
             expect(logic.values.activeTab?.description).toEqual('')
+        })
+    })
+
+    describe('updateInsight result handoff', () => {
+        it("stashes the editor's data node response so the insight view skips the stale GET", async () => {
+            // The editor runs the query when an insight is opened. Make that resolve to a
+            // known response so the editor's data node deterministically holds MOCK_EDITOR_RESPONSE.
+            const performQuerySpy = jest
+                .spyOn(queryRunner, 'performQuery')
+                .mockResolvedValue(MOCK_EDITOR_RESPONSE as never)
+
+            logic = sqlEditorLogic({
+                tabId: TAB_ID,
+                monaco: createMockMonaco(),
+                editor: createMockEditor(),
+            })
+            logic.mount()
+            editorRootLogic = editorSceneLogic({ tabId: TAB_ID })
+            editorRootLogic.mount()
+
+            router.actions.push(urls.sqlEditor(), { open_insight: MOCK_INSIGHT_SHORT_ID })
+            await expectLogic(logic)
+                .toDispatchActions(['editInsight', 'createTab', 'updateTab'])
+                .toMatchValues({ editingInsight: partial({ short_id: MOCK_INSIGHT_SHORT_ID }) })
+
+            // Hold a reference to the editor's data node (same key → same instance) and let
+            // the open-time query settle so its response is populated before the update.
+            const editorDataNode = dataNodeLogic({ key: logic.values.dataLogicKey, query: MOCK_INSIGHT_QUERY.source })
+            editorDataNode.mount()
+            await expectLogic(logic).toFinishAllListeners()
+
+            logic.actions.updateInsight()
+            await expectLogic(logic).toFinishAllListeners()
+
+            // The PATCH does not return computed results for a query-based insight, so the
+            // editor's just-run response must be handed off — otherwise the insight view
+            // refetches with refresh=async and renders the server's pre-edit cached result.
+            const handoff = consumeRecentlyUpdatedInsight(MOCK_INSIGHT_SHORT_ID)
+            expect(handoff?.insight.short_id).toEqual(MOCK_INSIGHT_SHORT_ID)
+            expect(handoff?.result).toEqual(MOCK_EDITOR_RESPONSE)
+
+            editorDataNode.unmount()
+            performQuerySpy.mockRestore()
         })
     })
 
