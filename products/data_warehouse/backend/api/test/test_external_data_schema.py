@@ -432,9 +432,7 @@ class TestExternalDataSchema(APIBaseTest):
         schema.refresh_from_db()
         assert schema.should_sync is False
 
-    def test_update_schema_enable_without_sync_type_defaults_to_full_refresh(self):
-        # Enabling a never-configured schema (sync_type=None) should default to full refresh
-        # instead of being rejected, so users can flip the toggle without first picking a method.
+    def _enable_never_configured_schema(self):
         source = ExternalDataSource.objects.create(
             team=self.team,
             source_type=ExternalDataSourceType.STRIPE,
@@ -460,6 +458,53 @@ class TestExternalDataSchema(APIBaseTest):
                 f"/api/environments/{self.team.pk}/external_data_schemas/{schema.id}",
                 data={"should_sync": True},
             )
+
+        return response, schema
+
+    def test_update_schema_enable_without_sync_type_defaults_to_incremental_when_available(self):
+        # When the source reports incremental support with a field, enabling a never-configured
+        # schema should default to incremental using the first detected field (and detected PKs).
+        fake_schema = SourceSchema(
+            name="BalanceTransaction",
+            supports_incremental=True,
+            supports_append=True,
+            incremental_fields=[
+                {"label": "created_at", "type": "datetime", "field": "created", "field_type": "integer"}
+            ],
+            detected_primary_keys=["id"],
+        )
+        with mock.patch.object(StripeSource, "get_schemas", return_value=[fake_schema]):
+            response, schema = self._enable_never_configured_schema()
+
+        assert response.status_code == status.HTTP_200_OK
+        schema.refresh_from_db()
+        assert schema.should_sync is True
+        assert schema.sync_type == ExternalDataSchema.SyncType.INCREMENTAL
+        assert schema.sync_type_config.get("incremental_field") == "created"
+        assert schema.sync_type_config.get("incremental_field_type") == "integer"
+        assert schema.sync_type_config.get("primary_key_columns") == ["id"]
+
+    def test_update_schema_enable_without_sync_type_defaults_to_full_refresh_when_not_incremental(self):
+        # No incremental support → fall back to full refresh rather than rejecting the enable.
+        fake_schema = SourceSchema(
+            name="BalanceTransaction",
+            supports_incremental=False,
+            supports_append=False,
+            incremental_fields=[],
+        )
+        with mock.patch.object(StripeSource, "get_schemas", return_value=[fake_schema]):
+            response, schema = self._enable_never_configured_schema()
+
+        assert response.status_code == status.HTTP_200_OK
+        schema.refresh_from_db()
+        assert schema.should_sync is True
+        assert schema.sync_type == ExternalDataSchema.SyncType.FULL_REFRESH
+
+    def test_update_schema_enable_without_sync_type_falls_back_to_full_refresh_on_discovery_error(self):
+        # Discovery failures (bad credentials, source down) must not block enabling — degrade to
+        # full refresh so the toggle still works.
+        with mock.patch.object(StripeSource, "get_schemas", side_effect=Exception("source unreachable")):
+            response, schema = self._enable_never_configured_schema()
 
         assert response.status_code == status.HTTP_200_OK
         schema.refresh_from_db()
