@@ -1,23 +1,16 @@
 import { useFeatureFlag } from 'lib/hooks/useFeatureFlag'
 
 /**
- * Intro for the wizard-only install variant.
+ * Intro copy above the wizard command block.
  *
- * Experiment: onboarding-wizard-installation-improved-copy (#team-growth)
- *   control — original one-line tagline
- *   test    — expanded copy that concretely enumerates what the wizard does,
- *             adds short "how it works" instructions (run from project root,
- *             follow prompts), and surfaces that PostHog covers LLM inference
- *             (no user API key required)
+ * Experiment: ONBOARDING_WIZARD_INSTALLATION_IMPROVED_COPY (#team-growth)
+ *   control — original one-line tagline.
+ *   test    — expanded copy: enumerates what the wizard does, where to run it,
+ *             and surfaces that PostHog covers LLM inference (no API key).
  *
- * Hypothesis: users are more likely to try the wizard when they understand
- * what it does, where to run it, and that it's free to run.
- *
- * Flag lookup is encapsulated here so WizardOnlyVariant stays agnostic of
- * the experiment. When the experiment concludes, the winning variant
- * replaces the dispatcher and this file collapses to a single component.
+ * Flag lookup lives here so WizardInstallStep stays agnostic of the experiment.
  */
-export function WizardOnlyIntro(): JSX.Element {
+export function WizardInstallIntro(): JSX.Element {
     const isImprovedCopy = useFeatureFlag('ONBOARDING_WIZARD_INSTALLATION_IMPROVED_COPY', 'test')
     return isImprovedCopy ? <ImprovedIntro /> : <ControlIntro />
 }

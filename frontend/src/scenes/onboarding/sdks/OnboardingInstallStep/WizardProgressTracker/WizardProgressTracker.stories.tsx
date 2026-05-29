@@ -111,9 +111,7 @@ function withSession(buildSession: (skillId: string) => WizardSessionFixture | n
 
         return (
             <SceneFrame>
-                <WizardProgressTracker
-                    onAutoAdvance={() => alert('Auto-advance: would go to the next onboarding step')}
-                />
+                <WizardProgressTracker />
             </SceneFrame>
         )
     }
@@ -182,7 +180,7 @@ export const Reconnecting: StoryFn<StoryArgs> = function ReconnectingStory({ ski
 
     return (
         <SceneFrame>
-            <WizardProgressTracker onAutoAdvance={() => alert('Auto-advance: would go to the next onboarding step')} />
+            <WizardProgressTracker />
         </SceneFrame>
     )
 }
@@ -265,7 +263,7 @@ export const FullInstallStepWithError: StoryFn<FullSceneArgs> = function FullIns
                 </div>
             }
         >
-            <WizardProgressTracker onAutoAdvance={() => alert('Auto-advance: would go to the next onboarding step')} />
+            <WizardProgressTracker />
             <div className="mt-6 text-sm">Need to set up manually?</div>
             <div className="mt-12 flex justify-end">
                 <LemonButton

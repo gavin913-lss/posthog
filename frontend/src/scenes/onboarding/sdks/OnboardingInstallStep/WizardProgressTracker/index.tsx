@@ -5,18 +5,14 @@ import { LemonBanner } from '@posthog/lemon-ui'
 
 import { SkillBadge } from '../../skillBadge'
 import { wizardProgressTrackerLogic } from '../wizardProgressTrackerLogic'
-import { AutoAdvanceCountdown } from './AutoAdvanceCountdown'
-import { AUTO_ADVANCE_SECONDS, bannerTypeFor, headlineFor, subLineFor } from './helpers'
+import { bannerTypeFor, headlineFor, subLineFor } from './helpers'
 
 /**
- * Inline confirmation card shown on the install step once a wizard session exists.
- *
- * While the wizard is running, a small countdown advances the user to the next
- * onboarding step after a few seconds — the FAB carries the live progress from
- * that point on. The parent supplies `onAutoAdvance` (typically wired to
- * `onboardingLogic.goToNextStep`).
+ * Inline confirmation card shown on the install step once a wizard session
+ * exists. The FAB carries the live progress everywhere else — this card just
+ * acknowledges the run so the user knows they can keep moving in onboarding.
  */
-export function WizardProgressTracker({ onAutoAdvance }: { onAutoAdvance?: () => void } = {}): JSX.Element | null {
+export function WizardProgressTracker(): JSX.Element | null {
     const { displayState, latestSession } = useValues(wizardProgressTrackerLogic)
     const { setPanelMounted } = useActions(wizardProgressTrackerLogic)
 
@@ -33,29 +29,23 @@ export function WizardProgressTracker({ onAutoAdvance }: { onAutoAdvance?: () =>
         displayState === 'error' && latestSession.error && typeof latestSession.error === 'object'
             ? (latestSession.error as { type?: string; message?: string })
             : null
-    const showAutoAdvance = (displayState === 'running' || displayState === 'connecting') && onAutoAdvance !== undefined
 
     return (
         <LemonBanner type={bannerTypeFor(displayState)}>
-            <div className="flex flex-wrap items-center justify-between gap-3">
-                <div className="min-w-0 space-y-1">
-                    <div className="font-semibold">{headlineFor(displayState)}</div>
-                    {displayState === 'error' && errorPayload ? (
-                        <div className="text-xs">
-                            <span className="font-semibold">{errorPayload.type}: </span>
-                            <span className="text-muted">{errorPayload.message}</span>
-                        </div>
-                    ) : (
-                        <div className="text-xs text-muted flex items-center flex-wrap gap-x-2 gap-y-1">
-                            <SkillBadge skillId={latestSession.skill_id} size={14} />
-                            <span>·</span>
-                            <span>{subLineFor(displayState)}</span>
-                        </div>
-                    )}
-                </div>
-                {showAutoAdvance ? (
-                    <AutoAdvanceCountdown durationSeconds={AUTO_ADVANCE_SECONDS} onAdvance={onAutoAdvance} />
-                ) : null}
+            <div className="min-w-0 space-y-1">
+                <div className="font-semibold">{headlineFor(displayState)}</div>
+                {displayState === 'error' && errorPayload ? (
+                    <div className="text-xs">
+                        <span className="font-semibold">{errorPayload.type}: </span>
+                        <span className="text-muted">{errorPayload.message}</span>
+                    </div>
+                ) : (
+                    <div className="text-xs text-muted flex items-center flex-wrap gap-x-2 gap-y-1">
+                        <SkillBadge skillId={latestSession.skill_id} size={14} />
+                        <span>·</span>
+                        <span>{subLineFor(displayState)}</span>
+                    </div>
+                )}
             </div>
         </LemonBanner>
     )
