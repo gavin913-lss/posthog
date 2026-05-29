@@ -37,6 +37,7 @@ import { DashboardLoadAction, dashboardLogic } from 'scenes/dashboard/dashboardL
 import { databaseTableListLogic } from 'scenes/data-management/database/databaseTableListLogic'
 import { parseQueryTablesAndColumns, queryUsesFiltersPlaceholder } from 'scenes/data-warehouse/editor/sql-utils'
 import { insightLogic } from 'scenes/insights/insightLogic'
+import { stashRecentlyUpdatedInsight } from 'scenes/insights/recentlyUpdatedInsights'
 import { insightsApi } from 'scenes/insights/utils/api'
 import { urls } from 'scenes/urls'
 import { userLogic } from 'scenes/userLogic'
@@ -1745,27 +1746,6 @@ export const sqlEditorLogic = kea<sqlEditorLogicType>([
                     })
                 }
                 insightsModel.findMounted()?.actions.renameInsightSuccess(savedInsight)
-                const loadedLogic = insightLogic.findMounted({
-                    dashboardItemId: values.editingInsight.short_id,
-                    dashboardId: undefined,
-                })
-                if (loadedLogic) {
-                    // The PATCH response doesn't include computed results for query-based
-                    // insights, so fall back to the freshly-run result from the editor's
-                    // data node — otherwise the view keeps showing the pre-edit cached
-                    // results until the user reloads the page.
-                    const editorResponse = dataNodeLogic.findMounted({
-                        key: values.dataLogicKey,
-                    })?.values.response
-                    const result = savedInsight.result ?? editorResponse ?? null
-                    loadedLogic.actions.setInsight(
-                        { ...savedInsight, result },
-                        {
-                            overrideQuery: true,
-                            fromPersistentApi: true,
-                        }
-                    )
-                }
 
                 const dashboardId = values.dashboardId
                 if (dashboardId) {
@@ -1782,6 +1762,16 @@ export const sqlEditorLogic = kea<sqlEditorLogicType>([
                     actions.setDashboardId(null)
                     router.actions.push(urls.dashboard(dashboardId, savedInsight.short_id))
                 } else {
+                    // The destination insight scene isn't mounted yet, and a GET with
+                    // refresh=async returns the server's pre-edit cached result. Hand the
+                    // freshly-PATCHed insight + the editor's just-run response to the next
+                    // scene via the cross-scene cache so insightSceneLogic can skip the
+                    // stale GET. (The dashboard branch above refreshes via loadDashboard,
+                    // so it doesn't need — and wouldn't consume — the stash.)
+                    const editorResponse = dataNodeLogic.findMounted({
+                        key: values.dataLogicKey,
+                    })?.values.response
+                    stashRecentlyUpdatedInsight(savedInsight, savedInsight.result ?? editorResponse ?? null)
                     lemonToast.info(
                         `You're now viewing ${savedInsight.name || savedInsight.derived_name || insightName || 'Untitled'}`
                     )

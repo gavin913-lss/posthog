@@ -49,6 +49,7 @@ import { PRODUCT_ANALYTICS_DEFAULT_QUERY_TAGS } from 'products/product_analytics
 import { insightDataLogic } from './insightDataLogic'
 import { insightDataLogicType } from './insightDataLogicType'
 import type { insightSceneLogicType } from './insightSceneLogicType'
+import { consumeRecentlyUpdatedInsight } from './recentlyUpdatedInsights'
 import { getInsightIconTypeFromQuery, parseDraftQueryFromURL } from './utils'
 
 const NEW_INSIGHT = 'new' as const
@@ -383,6 +384,12 @@ export const insightSceneLogic = kea<insightSceneLogicType>([
             const mountedDashboardItemId = values.insightLogicRef?.logic.props.dashboardItemId ?? null
             const propsMismatch = Boolean(insightId && mountedDashboardItemId && mountedDashboardItemId !== insightId)
 
+            // If a sibling scene (e.g. the SQL editor) just PATCHed this insight and stashed
+            // its freshly-run response, consume that handoff once so we can hydrate the
+            // insight + dataNodeLogic without re-fetching from the server (which would
+            // return the pre-edit cached result with refresh=async).
+            const recent = insightId ? consumeRecentlyUpdatedInsight(insightId) : null
+
             if (logicInsightId !== insightId || propsMismatch) {
                 const oldRef = values.insightLogicRef // free old logic after mounting new one
                 const oldRef2 = values.insightDataLogicRef // free old logic after mounting new one
@@ -394,6 +401,9 @@ export const insightSceneLogic = kea<insightSceneLogicType>([
                         variablesOverride: values.variablesOverride,
                         tileFiltersOverride: values.tileFiltersOverride,
                         tabId: values.tabId,
+                        // Seeding `cachedInsight` skips insightLogic.afterMount's GET. The
+                        // insight reducer is initialized to this value (name, query, id).
+                        cachedInsight: recent ? { ...recent.insight, result: recent.result } : undefined,
                     }
 
                     const logic = insightLogic.build(insightProps)
@@ -403,6 +413,15 @@ export const insightSceneLogic = kea<insightSceneLogicType>([
                     const logic2 = insightDataLogic.build(insightProps)
                     const unmount2 = logic2.mount()
                     actions.setInsightDataLogicRef(logic2, unmount2)
+
+                    if (recent?.result) {
+                        // Set dataNodeLogic.response directly. The insightDataLogic.setInsight
+                        // listener wraps a HogQLQueryResponse inside `{ ...prev, result: X }`,
+                        // which leaves `response.results` pointing at the pre-edit data the
+                        // SQL viz reads from. setInsightData (aliased to dataNodeLogic.setResponse)
+                        // replaces the whole response — correct for both SQL and non-SQL shapes.
+                        logic2.actions.setInsightData(recent.result)
+                    }
                 } else {
                     actions.setInsightLogicRef(null, null)
                     actions.setInsightDataLogicRef(null, null)
@@ -414,6 +433,18 @@ export const insightSceneLogic = kea<insightSceneLogicType>([
                     oldRef2.unmount()
                 }
             } else if (insightId) {
+                if (recent) {
+                    values.insightLogicRef?.logic.actions.setInsight(
+                        { ...recent.insight, result: recent.result },
+                        { overrideQuery: true, fromPersistentApi: true }
+                    )
+                    if (recent.result) {
+                        // See comment above — bypass the bridge that mis-shapes
+                        // HogQLQueryResponse and seed dataNodeLogic.response directly.
+                        values.insightDataLogicRef?.logic.actions.setInsightData(recent.result)
+                    }
+                    return
+                }
                 values.insightLogicRef?.logic.actions.loadInsight(
                     insightId as InsightShortId,
                     values.filtersOverride,
