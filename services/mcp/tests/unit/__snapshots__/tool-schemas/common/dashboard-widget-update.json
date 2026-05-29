@@ -2,7 +2,7 @@
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "properties": {
         "config": {
-            "description": "Updated widget configuration JSON. Validated for the tile's widget_type."
+            "description": "Updated widget configuration JSON. Validated for the tile's widget_type; see config_schema_hints in dashboard-widget-catalog-list."
         },
         "description": {
             "description": "Optional markdown description shown when show_description is enabled.",
