@@ -473,8 +473,13 @@ class ExternalDataSchemaSerializer(serializers.ModelSerializer):
                 validated_data["sync_time_of_day"] = None
                 instance.sync_time_of_day = None
 
+        # Enabling a schema that was never configured defaults to a full refresh rather than
+        # rejecting the request. Full refresh is valid for every source that supports scheduled
+        # sync and needs no incremental field or primary key, so it's the safe zero-config default.
+        # Users can switch to incremental/CDC/webhook later via the schema configuration page.
         if source.supports_scheduled_sync and should_sync is True and sync_type is None and instance.sync_type is None:
-            raise ValidationError("Sync type must be set up first before enabling schema")
+            sync_type = ExternalDataSchema.SyncType.FULL_REFRESH
+            validated_data["sync_type"] = sync_type
 
         # Catches a CDC schema being flipped on later when sync_type isn't changing — the
         # sync_type branch above doesn't run, so PK presence isn't enforced there.
