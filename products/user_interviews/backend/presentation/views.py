@@ -46,8 +46,7 @@ from posthog.permissions import PostHogFeatureFlagPermission
 from posthog.tasks.exports.csv_exporter import _sanitize_formula_injection
 from posthog.utils import absolute_uri
 
-from ..classification import derive_auto_classifications
-from ..facade.api import parse_interviewee_identifier
+from ..facade.api import derive_auto_classifications, parse_interviewee_identifier
 from ..facade.enums import SEARCH_DOCUMENT_TYPES
 from ..models import (
     EmailWithDisplayNameValidator,
