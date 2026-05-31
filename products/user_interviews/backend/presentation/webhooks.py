@@ -41,6 +41,7 @@ from posthog.rate_limit import IPThrottle
 from posthog.storage.llm_prompt_cache import get_prompt_by_name_from_cache
 
 from ..models import UserInterview, UserInterviewTopic
+from ..tagging import derive_auto_tags
 
 logger = structlog.get_logger(__name__)
 
@@ -497,6 +498,7 @@ def vapi_webhook(request: Request) -> Response:
 
     topic = interviewee_context.topic
     recording_url = (message.get("recording") or {}).get("url", "") or message.get("recordingUrl", "") or ""
+    transcript = message.get("transcript", "") or ""
 
     with transaction.atomic():
         interview = UserInterview.objects.create(
@@ -506,11 +508,12 @@ def vapi_webhook(request: Request) -> Response:
             interviewee_emails=[interviewee_context.interviewee_identifier]
             if "@" in interviewee_context.interviewee_identifier
             else [],
-            transcript=message.get("transcript", "") or "",
+            transcript=transcript,
             summary=message.get("summary", "") or "",
             recording_url=recording_url,
             call_metadata=call,
             created_by=topic.created_by,
+            tags=derive_auto_tags(transcript),
         )
         transaction.on_commit(lambda: _emit_interview_embeddings(interview, topic))
 

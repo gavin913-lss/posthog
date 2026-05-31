@@ -22,6 +22,13 @@ class EmailWithDisplayNameValidator:
         return validators.validate_email(value)
 
 
+class UserInterviewTag(models.TextChoices):
+    ABANDONED = "abandoned", "Abandoned"
+    SHORT = "short", "Short"
+    OFF_TOPIC = "off-topic", "Off-topic"
+    LONG = "long", "Long"
+
+
 class UserInterview(UUIDTModel, CreatedMetaFields):
     team = models.ForeignKey(Team, on_delete=models.CASCADE)
     interviewee_emails = ArrayField(
@@ -29,6 +36,11 @@ class UserInterview(UUIDTModel, CreatedMetaFields):
     )
     transcript = models.TextField(blank=True)
     summary = models.TextField(blank=True)
+    tags = ArrayField(
+        models.CharField(max_length=20, choices=UserInterviewTag.choices),
+        default=list,
+        blank=True,
+    )
     # Optional topic linkage for AI voice interviews triggered via SharingConfiguration links.
     topic = models.ForeignKey(
         "UserInterviewTopic",

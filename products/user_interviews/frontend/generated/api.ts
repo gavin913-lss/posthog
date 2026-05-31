@@ -508,6 +508,9 @@ export const userInterviewsCreate = async (
     if (userInterviewApi.summary !== undefined) {
         formData.append(`summary`, userInterviewApi.summary)
     }
+    if (userInterviewApi.tags !== undefined) {
+        userInterviewApi.tags.forEach((value) => formData.append(`tags`, value))
+    }
     formData.append(`audio`, userInterviewApi.audio)
 
     return apiMutator<UserInterviewApi>(getUserInterviewsCreateUrl(projectId), {
@@ -549,6 +552,9 @@ export const userInterviewsUpdate = async (
     if (userInterviewApi.summary !== undefined) {
         formData.append(`summary`, userInterviewApi.summary)
     }
+    if (userInterviewApi.tags !== undefined) {
+        userInterviewApi.tags.forEach((value) => formData.append(`tags`, value))
+    }
     formData.append(`audio`, userInterviewApi.audio)
 
     return apiMutator<UserInterviewApi>(getUserInterviewsUpdateUrl(projectId, id), {
@@ -574,6 +580,9 @@ export const userInterviewsPartialUpdate = async (
     }
     if (patchedUserInterviewApi?.summary !== undefined) {
         formData.append(`summary`, patchedUserInterviewApi.summary)
+    }
+    if (patchedUserInterviewApi?.tags !== undefined) {
+        patchedUserInterviewApi?.tags.forEach((value) => formData.append(`tags`, value))
     }
     if (patchedUserInterviewApi?.audio !== undefined) {
         formData.append(`audio`, patchedUserInterviewApi.audio)

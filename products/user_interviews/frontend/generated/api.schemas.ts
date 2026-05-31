@@ -255,6 +255,21 @@ export interface BulkIntervieweeContextResponseApi {
     skipped_identifiers: string[]
 }
 
+/**
+ * * `abandoned` - Abandoned
+ * `short` - Short
+ * `off-topic` - Off-topic
+ * `long` - Long
+ */
+export type TagsEnumApi = (typeof TagsEnumApi)[keyof typeof TagsEnumApi]
+
+export const TagsEnumApi = {
+    Abandoned: 'abandoned',
+    Short: 'short',
+    OffTopic: 'off-topic',
+    Long: 'long',
+} as const
+
 export interface UserInterviewApi {
     readonly id: string
     readonly created_by: UserBasicApi
@@ -265,6 +280,8 @@ export interface UserInterviewApi {
     readonly topic: string | null
     readonly transcript: string
     summary?: string
+    /** Searchable labels on the response. `abandoned` / `short` / `long` are auto-derived from the transcript when the interview is recorded; `off-topic` is set manually. Sending `tags` on an update replaces the whole list — pass the full desired set, not a delta. */
+    tags?: TagsEnumApi[]
     audio: string
 }
 
@@ -287,6 +304,8 @@ export interface PatchedUserInterviewApi {
     readonly topic?: string | null
     readonly transcript?: string
     summary?: string
+    /** Searchable labels on the response. `abandoned` / `short` / `long` are auto-derived from the transcript when the interview is recorded; `off-topic` is set manually. Sending `tags` on an update replaces the whole list — pass the full desired set, not a delta. */
+    tags?: TagsEnumApi[]
     audio?: string
 }
 
@@ -318,6 +337,11 @@ export interface UserInterviewSearchRequestApi {
      * @nullable
      */
     topic_id?: string | null
+    /**
+     * Optional. Restrict results to interviews carrying any of these tags (OR). Combines with `topic_id` as AND.
+     * @minItems 1
+     */
+    tags?: TagsEnumApi[]
     /**
      * Maximum number of matches to return (1-50). Defaults to 10. Two matches per interview are possible — one for the transcript, one for the summary.
      * @minimum 1
@@ -384,5 +408,9 @@ export type UserInterviewsListParams = {
      * The initial index from which to return the results.
      */
     offset?: number
+    /**
+     * Comma-separated tags; returns responses carrying any of them (OR). Valid values: abandoned, short, off-topic, long.
+     */
+    tags?: string
     topic?: string
 }

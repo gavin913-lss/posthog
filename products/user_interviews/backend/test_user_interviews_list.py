@@ -28,7 +28,12 @@ class TestUserInterviewsListFilters(APIBaseTest):
         )
 
     def _create_interview(
-        self, *, topic: UserInterviewTopic | None, summary: str, team: Team | None = None
+        self,
+        *,
+        topic: UserInterviewTopic | None,
+        summary: str,
+        team: Team | None = None,
+        tags: list[str] | None = None,
     ) -> UserInterview:
         return UserInterview.objects.create(
             team=team or self.team,
@@ -37,6 +42,7 @@ class TestUserInterviewsListFilters(APIBaseTest):
             transcript="Hello world",
             summary=summary,
             topic=topic,
+            tags=tags or [],
         )
 
     @parameterized.expand(
@@ -82,6 +88,55 @@ class TestUserInterviewsListFilters(APIBaseTest):
         filtered_by_other_team_topic = self.client.get(self._list_url(), {"topic": str(other_topic.id)})
         assert filtered_by_other_team_topic.status_code == status.HTTP_200_OK, filtered_by_other_team_topic.content
         assert filtered_by_other_team_topic.json()["results"] == []
+
+    @parameterized.expand(
+        [
+            ("no tag filter returns all", None, {"abandoned-one", "short-one", "long-one", "untagged"}),
+            ("single tag", "abandoned", {"abandoned-one"}),
+            ("multiple tags are OR", "abandoned,long", {"abandoned-one", "long-one"}),
+            ("tag with no matches", "off-topic", set()),
+        ]
+    )
+    def test_tags_filter(self, _name: str, tags_param: str | None, expected_summaries: set[str]) -> None:
+        topic = self._create_topic("Tagged topic")
+        self._create_interview(topic=topic, summary="abandoned-one", tags=["abandoned"])
+        self._create_interview(topic=topic, summary="short-one", tags=["short"])
+        self._create_interview(topic=topic, summary="long-one", tags=["long"])
+        self._create_interview(topic=topic, summary="untagged", tags=[])
+
+        params = {} if tags_param is None else {"tags": tags_param}
+        response = self.client.get(self._list_url(), params)
+
+        assert response.status_code == status.HTTP_200_OK, response.content
+        summaries = {row["summary"] for row in response.json()["results"]}
+        assert summaries == expected_summaries
+
+    def test_partial_update_replaces_tags(self) -> None:
+        topic = self._create_topic("Tagged topic")
+        interview = self._create_interview(topic=topic, summary="resp", tags=["short"])
+
+        response = self.client.patch(
+            f"{self._list_url()}{interview.id}/",
+            {"tags": ["off-topic", "long"]},
+            format="json",
+        )
+
+        assert response.status_code == status.HTTP_200_OK, response.content
+        assert set(response.json()["tags"]) == {"off-topic", "long"}
+        interview.refresh_from_db()
+        assert set(interview.tags) == {"off-topic", "long"}
+
+    def test_partial_update_rejects_unknown_tag(self) -> None:
+        topic = self._create_topic("Tagged topic")
+        interview = self._create_interview(topic=topic, summary="resp", tags=[])
+
+        response = self.client.patch(
+            f"{self._list_url()}{interview.id}/",
+            {"tags": ["bogus"]},
+            format="json",
+        )
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST, response.content
 
     def test_retrieve_returns_full_transcript_and_summary(self) -> None:
         topic = self._create_topic("Topic A")

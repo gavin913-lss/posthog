@@ -26386,6 +26386,22 @@ export namespace Schemas {
       results: UserGitHubIntegrationListResponse[];
     }
 
+    /**
+     * * `abandoned` - Abandoned
+    * `short` - Short
+    * `off-topic` - Off-topic
+    * `long` - Long
+     */
+    export type TagsEnum = typeof TagsEnum[keyof typeof TagsEnum];
+
+
+    export const TagsEnum = {
+      Abandoned: 'abandoned',
+      Short: 'short',
+      OffTopic: 'off-topic',
+      Long: 'long',
+    } as const;
+
     export interface UserInterview {
       readonly id: string;
       readonly created_by: UserBasic;
@@ -26396,6 +26412,8 @@ export namespace Schemas {
       readonly topic: string | null;
       readonly transcript: string;
       summary?: string;
+      /** Searchable labels on the response. `abandoned` / `short` / `long` are auto-derived from the transcript when the interview is recorded; `off-topic` is set manually. Sending `tags` on an update replaces the whole list — pass the full desired set, not a delta. */
+      tags?: TagsEnum[];
       audio: string;
     }
 
@@ -32435,6 +32453,8 @@ export namespace Schemas {
       readonly topic?: string | null;
       readonly transcript?: string;
       summary?: string;
+      /** Searchable labels on the response. `abandoned` / `short` / `long` are auto-derived from the transcript when the interview is recorded; `off-topic` is set manually. Sending `tags` on an update replaces the whole list — pass the full desired set, not a delta. */
+      tags?: TagsEnum[];
       audio?: string;
     }
 
@@ -39072,6 +39092,11 @@ export namespace Schemas {
          */
       topic_id?: string | null;
       /**
+         * Optional. Restrict results to interviews carrying any of these tags (OR). Combines with `topic_id` as AND.
+         * @minItems 1
+         */
+      tags?: TagsEnum[];
+      /**
          * Maximum number of matches to return (1-50). Defaults to 10. Two matches per interview are possible — one for the transcript, one for the summary.
          * @minimum 1
          * @maximum 50
@@ -43733,6 +43758,10 @@ export namespace Schemas {
      * The initial index from which to return the results.
      */
     offset?: number;
+    /**
+     * Comma-separated tags; returns responses carrying any of them (OR). Valid values: abandoned, short, off-topic, long.
+     */
+    tags?: string;
     topic?: string;
     };
 

@@ -26,6 +26,8 @@ import {
     UserInterviewTopicsSendInvitesCreateBody,
     UserInterviewTopicsSendInvitesCreateParams,
     UserInterviewsListQueryParams,
+    UserInterviewsPartialUpdateBody,
+    UserInterviewsPartialUpdateParams,
     UserInterviewsRetrieveParams,
     UserInterviewsSearchCreateBody,
 } from '@/generated/user_interviews/api'
@@ -394,10 +396,33 @@ const userInterviewsList = (): ToolBase<
             query: {
                 limit: params.limit,
                 offset: params.offset,
+                tags: params.tags,
                 topic: params.topic,
             },
         })
         return await withPostHogUrl(context, result, '/user_interviews')
+    },
+})
+
+const UserInterviewsPartialUpdateSchema = UserInterviewsPartialUpdateParams.omit({ project_id: true }).extend(
+    UserInterviewsPartialUpdateBody.omit({ interviewee_emails: true, summary: true, audio: true }).shape
+)
+
+const userInterviewsPartialUpdate = (): ToolBase<typeof UserInterviewsPartialUpdateSchema, Schemas.UserInterview> => ({
+    name: 'user-interviews-partial-update',
+    schema: UserInterviewsPartialUpdateSchema,
+    handler: async (context: Context, params: z.infer<typeof UserInterviewsPartialUpdateSchema>) => {
+        const projectId = await context.stateManager.getProjectId()
+        const body: Record<string, unknown> = {}
+        if (params.tags !== undefined) {
+            body['tags'] = params.tags
+        }
+        const result = await context.api.request<Schemas.UserInterview>({
+            method: 'PATCH',
+            path: `/api/environments/${encodeURIComponent(String(projectId))}/user_interviews/${encodeURIComponent(String(params.id))}/`,
+            body,
+        })
+        return result
     },
 })
 
@@ -433,6 +458,9 @@ const userInterviewsSearch = (): ToolBase<typeof UserInterviewsSearchSchema, Sch
         if (params.topic_id !== undefined) {
             body['topic_id'] = params.topic_id
         }
+        if (params.tags !== undefined) {
+            body['tags'] = params.tags
+        }
         if (params.limit !== undefined) {
             body['limit'] = params.limit
         }
@@ -461,6 +489,7 @@ export const GENERATED_TOOLS: Record<string, () => ToolBase<ZodObjectAny>> = {
     'user-interview-topics-retrieve': userInterviewTopicsRetrieve,
     'user-interview-topics-send-invites': userInterviewTopicsSendInvites,
     'user-interviews-list': userInterviewsList,
+    'user-interviews-partial-update': userInterviewsPartialUpdate,
     'user-interviews-retrieve': userInterviewsRetrieve,
     'user-interviews-search': userInterviewsSearch,
 }

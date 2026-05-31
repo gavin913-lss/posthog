@@ -13,6 +13,7 @@ from django.utils import timezone
 from django.utils.text import slugify
 
 import structlog
+import django_filters
 import posthoganalytics
 import posthoganalytics.ai.openai
 from django_filters.rest_framework import DjangoFilterBackend
@@ -47,7 +48,14 @@ from posthog.utils import absolute_uri
 
 from ..facade.api import parse_interviewee_identifier
 from ..facade.enums import SEARCH_DOCUMENT_TYPES
-from ..models import EmailWithDisplayNameValidator, IntervieweeContext, UserInterview, UserInterviewTopic
+from ..models import (
+    EmailWithDisplayNameValidator,
+    IntervieweeContext,
+    UserInterview,
+    UserInterviewTag,
+    UserInterviewTopic,
+)
+from ..tagging import derive_auto_tags
 
 logger = structlog.get_logger(__name__)
 
@@ -63,6 +71,15 @@ class _InterviewLinksCSVRenderer(csvrenderers.CSVRenderer):
 class UserInterviewSerializer(serializers.ModelSerializer):
     created_by = UserBasicSerializer(read_only=True)
     audio = serializers.FileField(write_only=True)
+    tags = serializers.ListField(
+        child=serializers.ChoiceField(choices=UserInterviewTag.choices),
+        required=False,
+        help_text=(
+            "Searchable labels on the response. `abandoned` / `short` / `long` are auto-derived from the "
+            "transcript when the interview is recorded; `off-topic` is set manually. Sending `tags` on an "
+            "update replaces the whole list — pass the full desired set, not a delta."
+        ),
+    )
 
     class Meta:
         model = UserInterview
@@ -75,6 +92,7 @@ class UserInterviewSerializer(serializers.ModelSerializer):
             "topic",
             "transcript",
             "summary",
+            "tags",
             "audio",
         )
         read_only_fields = ("id", "created_by", "created_at", "interviewee_identifier", "topic", "transcript")
@@ -86,6 +104,7 @@ class UserInterviewSerializer(serializers.ModelSerializer):
         audio = validated_data.pop("audio")
         validated_data["transcript"] = self._transcribe_audio(audio, validated_data["interviewee_emails"])
         validated_data["summary"] = self._summarize_transcript(validated_data["transcript"])
+        validated_data["tags"] = derive_auto_tags(validated_data["transcript"])
         return super().create(validated_data)
 
     def _transcribe_audio(self, audio: File, interviewee_emails: list[str]) -> str:
@@ -287,6 +306,15 @@ class UserInterviewSearchRequestSerializer(serializers.Serializer):
         allow_null=True,
         help_text="Optional. Restrict results to interviews belonging to a specific UserInterviewTopic.",
     )
+    tags = serializers.ListField(
+        child=serializers.ChoiceField(choices=UserInterviewTag.choices),
+        required=False,
+        allow_empty=False,
+        min_length=1,
+        help_text=(
+            "Optional. Restrict results to interviews carrying any of these tags (OR). Combines with `topic_id` as AND."
+        ),
+    )
     limit = serializers.IntegerField(
         required=False,
         min_value=1,
@@ -321,6 +349,24 @@ class UserInterviewSearchResultSerializer(serializers.Serializer):
     created_at = serializers.DateTimeField(help_text="When the interview row was created.")
 
 
+class UserInterviewFilterSet(django_filters.FilterSet):
+    tags = django_filters.CharFilter(
+        method="filter_tags",
+        help_text=(
+            "Comma-separated tags; returns responses carrying any of them (OR). "
+            "Valid values: abandoned, short, off-topic, long."
+        ),
+    )
+
+    class Meta:
+        model = UserInterview
+        fields = ["topic"]
+
+    def filter_tags(self, queryset: Any, name: str, value: str) -> Any:
+        wanted = [t.strip() for t in value.split(",") if t.strip()]
+        return queryset.filter(tags__overlap=wanted) if wanted else queryset
+
+
 @extend_schema(tags=[ProductKey.USER_INTERVIEWS])
 class UserInterviewViewSet(TeamAndOrgViewSetMixin, viewsets.ModelViewSet):
     scope_object = "user_interview"
@@ -330,7 +376,7 @@ class UserInterviewViewSet(TeamAndOrgViewSetMixin, viewsets.ModelViewSet):
     posthog_feature_flag = "user-interviews"
     permission_classes = [PostHogFeatureFlagPermission]
     filter_backends = [DjangoFilterBackend]
-    filterset_fields = ["topic"]
+    filterset_class = UserInterviewFilterSet
 
     @validated_request(
         request_serializer=UserInterviewSearchRequestSerializer,
@@ -362,19 +408,21 @@ class UserInterviewViewSet(TeamAndOrgViewSetMixin, viewsets.ModelViewSet):
         query_str: str = body["query"]
         document_types: list[str] = body.get("document_types") or list(SEARCH_DOCUMENT_TYPES)
         topic_id = body.get("topic_id")
+        tags: list[str] = body.get("tags") or []
         limit: int = body.get("limit") or SEARCH_DEFAULT_LIMIT
 
-        # When a topic_id filter is requested, resolve it via the current Postgres linkage
-        # rather than the embedding-time `metadata.topic_id` — UserInterview.topic is
+        # When a topic_id or tags filter is requested, resolve it via the current Postgres
+        # linkage rather than the embedding-time `metadata.topic_id` — UserInterview.topic is
         # nullable with on_delete=SET_NULL, so historical metadata can name a topic the
-        # row no longer belongs to.
+        # row no longer belongs to, and tags are mutated post-embedding.
         scoped_document_ids: list[str] | None = None
-        if topic_id is not None:
-            scoped_ids_qs = (
-                UserInterview.objects.filter(team_id=self.team_id, topic_id=topic_id)
-                .order_by("id")
-                .values_list("id", flat=True)[: SEARCH_TOPIC_INTERVIEW_CAP + 1]
-            )
+        if topic_id is not None or tags:
+            scoped_qs = UserInterview.objects.filter(team_id=self.team_id)
+            if topic_id is not None:
+                scoped_qs = scoped_qs.filter(topic_id=topic_id)
+            if tags:
+                scoped_qs = scoped_qs.filter(tags__overlap=tags)
+            scoped_ids_qs = scoped_qs.order_by("id").values_list("id", flat=True)[: SEARCH_TOPIC_INTERVIEW_CAP + 1]
             scoped_document_ids = [str(pk) for pk in scoped_ids_qs]
             if not scoped_document_ids:
                 return response.Response(UserInterviewSearchResultSerializer([], many=True).data)
