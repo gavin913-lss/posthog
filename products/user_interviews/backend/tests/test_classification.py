@@ -13,10 +13,15 @@ _MEDIUM_RESPONSE = "AI: Walk me through your week.\nUser: " + " ".join(["word"] 
 class TestDeriveAutoClassifications(SimpleTestCase):
     @parameterized.expand(
         [
-            ("empty transcript", "", [UserInterviewClassification.ABANDONED]),
+            ("empty transcript has no parseable turns", "", []),
             ("ai only, no user turn", "AI: Hi there, are you free?\n", [UserInterviewClassification.ABANDONED]),
             ("ai only multi line", "AI: Hi.\nAI: Still there?\n", [UserInterviewClassification.ABANDONED]),
             ("blank user turn is not a real turn", "AI: Hello.\nUser:   \n", [UserInterviewClassification.ABANDONED]),
+            (
+                "unrecognised speaker-heading format is left untagged, not abandoned",
+                "#### Speaker 1\nThanks for joining today.\n#### Speaker 2\nHappy to help, this product changed how we work.",
+                [],
+            ),
             ("short response", _SHORT_RESPONSE, [UserInterviewClassification.SHORT]),
             ("long response", _LONG_RESPONSE, [UserInterviewClassification.LONG]),
             ("medium response gets no length classification", _MEDIUM_RESPONSE, []),

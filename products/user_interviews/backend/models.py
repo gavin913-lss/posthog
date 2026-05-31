@@ -1,6 +1,7 @@
 import re
 
 from django.contrib.postgres.fields import ArrayField
+from django.contrib.postgres.indexes import GinIndex
 from django.core import validators
 from django.db import models
 from django.utils.deconstruct import deconstructible
@@ -52,6 +53,11 @@ class UserInterview(UUIDTModel, CreatedMetaFields):
     interviewee_identifier = models.CharField(max_length=400, blank=True, default="")
     recording_url = models.URLField(blank=True, default="", max_length=2048)
     call_metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        # GIN index backs the `classifications__overlap` (&&) filter used by the list and
+        # search endpoints — without it those queries fall back to a sequential scan.
+        indexes = [GinIndex(fields=["classifications"], name="user_interview_classif_gin")]
 
 
 class UserInterviewTopic(UUIDTModel, CreatedMetaFields):
