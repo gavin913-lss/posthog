@@ -261,9 +261,9 @@ export interface BulkIntervieweeContextResponseApi {
  * `off-topic` - Off-topic
  * `long` - Long
  */
-export type TagsEnumApi = (typeof TagsEnumApi)[keyof typeof TagsEnumApi]
+export type ClassificationsEnumApi = (typeof ClassificationsEnumApi)[keyof typeof ClassificationsEnumApi]
 
-export const TagsEnumApi = {
+export const ClassificationsEnumApi = {
     Abandoned: 'abandoned',
     Short: 'short',
     OffTopic: 'off-topic',
@@ -280,8 +280,8 @@ export interface UserInterviewApi {
     readonly topic: string | null
     readonly transcript: string
     summary?: string
-    /** Searchable labels on the response. `abandoned` / `short` / `long` are auto-derived from the transcript when the interview is recorded; `off-topic` is set manually. Sending `tags` on an update replaces the whole list — pass the full desired set, not a delta. */
-    tags?: TagsEnumApi[]
+    /** Searchable classifications on the response. `abandoned` / `short` / `long` are auto-derived from the transcript when the interview is recorded; `off-topic` is set manually. Sending `classifications` on an update replaces the whole list — pass the full desired set, not a delta. */
+    classifications?: ClassificationsEnumApi[]
     audio: string
 }
 
@@ -304,8 +304,8 @@ export interface PatchedUserInterviewApi {
     readonly topic?: string | null
     readonly transcript?: string
     summary?: string
-    /** Searchable labels on the response. `abandoned` / `short` / `long` are auto-derived from the transcript when the interview is recorded; `off-topic` is set manually. Sending `tags` on an update replaces the whole list — pass the full desired set, not a delta. */
-    tags?: TagsEnumApi[]
+    /** Searchable classifications on the response. `abandoned` / `short` / `long` are auto-derived from the transcript when the interview is recorded; `off-topic` is set manually. Sending `classifications` on an update replaces the whole list — pass the full desired set, not a delta. */
+    classifications?: ClassificationsEnumApi[]
     audio?: string
 }
 
@@ -338,10 +338,10 @@ export interface UserInterviewSearchRequestApi {
      */
     topic_id?: string | null
     /**
-     * Optional. Restrict results to interviews carrying any of these tags (OR). Combines with `topic_id` as AND.
+     * Optional. Restrict results to interviews carrying any of these classifications (OR). Combines with `topic_id` as AND.
      * @minItems 1
      */
-    tags?: TagsEnumApi[]
+    classifications?: ClassificationsEnumApi[]
     /**
      * Maximum number of matches to return (1-50). Defaults to 10. Two matches per interview are possible — one for the transcript, one for the summary.
      * @minimum 1
@@ -401,6 +401,10 @@ export type UserInterviewTopicsIntervieweesListParams = {
 
 export type UserInterviewsListParams = {
     /**
+     * Comma-separated classifications; returns responses carrying any of them (OR). Valid values: abandoned, short, off-topic, long.
+     */
+    classifications?: string
+    /**
      * Number of results to return per page.
      */
     limit?: number
@@ -408,9 +412,5 @@ export type UserInterviewsListParams = {
      * The initial index from which to return the results.
      */
     offset?: number
-    /**
-     * Comma-separated tags; returns responses carrying any of them (OR). Valid values: abandoned, short, off-topic, long.
-     */
-    tags?: string
     topic?: string
 }

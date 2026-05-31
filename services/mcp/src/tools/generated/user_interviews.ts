@@ -394,9 +394,9 @@ const userInterviewsList = (): ToolBase<
             method: 'GET',
             path: `/api/environments/${encodeURIComponent(String(projectId))}/user_interviews/`,
             query: {
+                classifications: params.classifications,
                 limit: params.limit,
                 offset: params.offset,
-                tags: params.tags,
                 topic: params.topic,
             },
         })
@@ -414,8 +414,8 @@ const userInterviewsPartialUpdate = (): ToolBase<typeof UserInterviewsPartialUpd
     handler: async (context: Context, params: z.infer<typeof UserInterviewsPartialUpdateSchema>) => {
         const projectId = await context.stateManager.getProjectId()
         const body: Record<string, unknown> = {}
-        if (params.tags !== undefined) {
-            body['tags'] = params.tags
+        if (params.classifications !== undefined) {
+            body['classifications'] = params.classifications
         }
         const result = await context.api.request<Schemas.UserInterview>({
             method: 'PATCH',
@@ -458,8 +458,8 @@ const userInterviewsSearch = (): ToolBase<typeof UserInterviewsSearchSchema, Sch
         if (params.topic_id !== undefined) {
             body['topic_id'] = params.topic_id
         }
-        if (params.tags !== undefined) {
-            body['tags'] = params.tags
+        if (params.classifications !== undefined) {
+            body['classifications'] = params.classifications
         }
         if (params.limit !== undefined) {
             body['limit'] = params.limit

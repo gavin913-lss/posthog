@@ -508,8 +508,8 @@ export const userInterviewsCreate = async (
     if (userInterviewApi.summary !== undefined) {
         formData.append(`summary`, userInterviewApi.summary)
     }
-    if (userInterviewApi.tags !== undefined) {
-        userInterviewApi.tags.forEach((value) => formData.append(`tags`, value))
+    if (userInterviewApi.classifications !== undefined) {
+        userInterviewApi.classifications.forEach((value) => formData.append(`classifications`, value))
     }
     formData.append(`audio`, userInterviewApi.audio)
 
@@ -552,8 +552,8 @@ export const userInterviewsUpdate = async (
     if (userInterviewApi.summary !== undefined) {
         formData.append(`summary`, userInterviewApi.summary)
     }
-    if (userInterviewApi.tags !== undefined) {
-        userInterviewApi.tags.forEach((value) => formData.append(`tags`, value))
+    if (userInterviewApi.classifications !== undefined) {
+        userInterviewApi.classifications.forEach((value) => formData.append(`classifications`, value))
     }
     formData.append(`audio`, userInterviewApi.audio)
 
@@ -581,8 +581,8 @@ export const userInterviewsPartialUpdate = async (
     if (patchedUserInterviewApi?.summary !== undefined) {
         formData.append(`summary`, patchedUserInterviewApi.summary)
     }
-    if (patchedUserInterviewApi?.tags !== undefined) {
-        patchedUserInterviewApi?.tags.forEach((value) => formData.append(`tags`, value))
+    if (patchedUserInterviewApi?.classifications !== undefined) {
+        patchedUserInterviewApi?.classifications.forEach((value) => formData.append(`classifications`, value))
     }
     if (patchedUserInterviewApi?.audio !== undefined) {
         formData.append(`audio`, patchedUserInterviewApi.audio)

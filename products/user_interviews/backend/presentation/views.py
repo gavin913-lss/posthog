@@ -46,16 +46,16 @@ from posthog.permissions import PostHogFeatureFlagPermission
 from posthog.tasks.exports.csv_exporter import _sanitize_formula_injection
 from posthog.utils import absolute_uri
 
+from ..classification import derive_auto_classifications
 from ..facade.api import parse_interviewee_identifier
 from ..facade.enums import SEARCH_DOCUMENT_TYPES
 from ..models import (
     EmailWithDisplayNameValidator,
     IntervieweeContext,
     UserInterview,
-    UserInterviewTag,
+    UserInterviewClassification,
     UserInterviewTopic,
 )
-from ..tagging import derive_auto_tags
 
 logger = structlog.get_logger(__name__)
 
@@ -71,13 +71,13 @@ class _InterviewLinksCSVRenderer(csvrenderers.CSVRenderer):
 class UserInterviewSerializer(serializers.ModelSerializer):
     created_by = UserBasicSerializer(read_only=True)
     audio = serializers.FileField(write_only=True)
-    tags = serializers.ListField(
-        child=serializers.ChoiceField(choices=UserInterviewTag.choices),
+    classifications = serializers.ListField(
+        child=serializers.ChoiceField(choices=UserInterviewClassification.choices),
         required=False,
         help_text=(
-            "Searchable labels on the response. `abandoned` / `short` / `long` are auto-derived from the "
-            "transcript when the interview is recorded; `off-topic` is set manually. Sending `tags` on an "
-            "update replaces the whole list — pass the full desired set, not a delta."
+            "Searchable classifications on the response. `abandoned` / `short` / `long` are auto-derived from "
+            "the transcript when the interview is recorded; `off-topic` is set manually. Sending "
+            "`classifications` on an update replaces the whole list — pass the full desired set, not a delta."
         ),
     )
 
@@ -92,7 +92,7 @@ class UserInterviewSerializer(serializers.ModelSerializer):
             "topic",
             "transcript",
             "summary",
-            "tags",
+            "classifications",
             "audio",
         )
         read_only_fields = ("id", "created_by", "created_at", "interviewee_identifier", "topic", "transcript")
@@ -104,7 +104,7 @@ class UserInterviewSerializer(serializers.ModelSerializer):
         audio = validated_data.pop("audio")
         validated_data["transcript"] = self._transcribe_audio(audio, validated_data["interviewee_emails"])
         validated_data["summary"] = self._summarize_transcript(validated_data["transcript"])
-        validated_data["tags"] = derive_auto_tags(validated_data["transcript"])
+        validated_data["classifications"] = derive_auto_classifications(validated_data["transcript"])
         return super().create(validated_data)
 
     def _transcribe_audio(self, audio: File, interviewee_emails: list[str]) -> str:
@@ -306,13 +306,14 @@ class UserInterviewSearchRequestSerializer(serializers.Serializer):
         allow_null=True,
         help_text="Optional. Restrict results to interviews belonging to a specific UserInterviewTopic.",
     )
-    tags = serializers.ListField(
-        child=serializers.ChoiceField(choices=UserInterviewTag.choices),
+    classifications = serializers.ListField(
+        child=serializers.ChoiceField(choices=UserInterviewClassification.choices),
         required=False,
         allow_empty=False,
         min_length=1,
         help_text=(
-            "Optional. Restrict results to interviews carrying any of these tags (OR). Combines with `topic_id` as AND."
+            "Optional. Restrict results to interviews carrying any of these classifications (OR). "
+            "Combines with `topic_id` as AND."
         ),
     )
     limit = serializers.IntegerField(
@@ -350,10 +351,10 @@ class UserInterviewSearchResultSerializer(serializers.Serializer):
 
 
 class UserInterviewFilterSet(django_filters.FilterSet):
-    tags = django_filters.CharFilter(
-        method="filter_tags",
+    classifications = django_filters.CharFilter(
+        method="filter_classifications",
         help_text=(
-            "Comma-separated tags; returns responses carrying any of them (OR). "
+            "Comma-separated classifications; returns responses carrying any of them (OR). "
             "Valid values: abandoned, short, off-topic, long."
         ),
     )
@@ -362,9 +363,9 @@ class UserInterviewFilterSet(django_filters.FilterSet):
         model = UserInterview
         fields = ["topic"]
 
-    def filter_tags(self, queryset: Any, name: str, value: str) -> Any:
+    def filter_classifications(self, queryset: Any, name: str, value: str) -> Any:
         wanted = [t.strip() for t in value.split(",") if t.strip()]
-        return queryset.filter(tags__overlap=wanted) if wanted else queryset
+        return queryset.filter(classifications__overlap=wanted) if wanted else queryset
 
 
 @extend_schema(tags=[ProductKey.USER_INTERVIEWS])
@@ -408,20 +409,20 @@ class UserInterviewViewSet(TeamAndOrgViewSetMixin, viewsets.ModelViewSet):
         query_str: str = body["query"]
         document_types: list[str] = body.get("document_types") or list(SEARCH_DOCUMENT_TYPES)
         topic_id = body.get("topic_id")
-        tags: list[str] = body.get("tags") or []
+        classifications: list[str] = body.get("classifications") or []
         limit: int = body.get("limit") or SEARCH_DEFAULT_LIMIT
 
-        # When a topic_id or tags filter is requested, resolve it via the current Postgres
-        # linkage rather than the embedding-time `metadata.topic_id` — UserInterview.topic is
-        # nullable with on_delete=SET_NULL, so historical metadata can name a topic the
-        # row no longer belongs to, and tags are mutated post-embedding.
+        # When a topic_id or classifications filter is requested, resolve it via the current
+        # Postgres linkage rather than the embedding-time `metadata.topic_id` — UserInterview.topic
+        # is nullable with on_delete=SET_NULL, so historical metadata can name a topic the
+        # row no longer belongs to, and classifications are mutated post-embedding.
         scoped_document_ids: list[str] | None = None
-        if topic_id is not None or tags:
+        if topic_id is not None or classifications:
             scoped_qs = UserInterview.objects.filter(team_id=self.team_id)
             if topic_id is not None:
                 scoped_qs = scoped_qs.filter(topic_id=topic_id)
-            if tags:
-                scoped_qs = scoped_qs.filter(tags__overlap=tags)
+            if classifications:
+                scoped_qs = scoped_qs.filter(classifications__overlap=classifications)
             scoped_ids_qs = scoped_qs.order_by("id").values_list("id", flat=True)[: SEARCH_TOPIC_INTERVIEW_CAP + 1]
             scoped_document_ids = [str(pk) for pk in scoped_ids_qs]
             if not scoped_document_ids:

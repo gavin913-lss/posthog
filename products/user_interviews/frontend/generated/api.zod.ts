@@ -246,7 +246,7 @@ export const userInterviewsCreateBodyIntervieweeEmailsItemMax = 254
 export const UserInterviewsCreateBody = /* @__PURE__ */ zod.object({
     interviewee_emails: zod.array(zod.string().max(userInterviewsCreateBodyIntervieweeEmailsItemMax)).optional(),
     summary: zod.string().optional(),
-    tags: zod
+    classifications: zod
         .array(
             zod
                 .enum(['abandoned', 'short', 'off-topic', 'long'])
@@ -256,7 +256,7 @@ export const UserInterviewsCreateBody = /* @__PURE__ */ zod.object({
         )
         .optional()
         .describe(
-            'Searchable labels on the response. `abandoned` \/ `short` \/ `long` are auto-derived from the transcript when the interview is recorded; `off-topic` is set manually. Sending `tags` on an update replaces the whole list — pass the full desired set, not a delta.'
+            'Searchable classifications on the response. `abandoned` \/ `short` \/ `long` are auto-derived from the transcript when the interview is recorded; `off-topic` is set manually. Sending `classifications` on an update replaces the whole list — pass the full desired set, not a delta.'
         ),
     audio: zod.url(),
 })
@@ -266,7 +266,7 @@ export const userInterviewsUpdateBodyIntervieweeEmailsItemMax = 254
 export const UserInterviewsUpdateBody = /* @__PURE__ */ zod.object({
     interviewee_emails: zod.array(zod.string().max(userInterviewsUpdateBodyIntervieweeEmailsItemMax)).optional(),
     summary: zod.string().optional(),
-    tags: zod
+    classifications: zod
         .array(
             zod
                 .enum(['abandoned', 'short', 'off-topic', 'long'])
@@ -276,7 +276,7 @@ export const UserInterviewsUpdateBody = /* @__PURE__ */ zod.object({
         )
         .optional()
         .describe(
-            'Searchable labels on the response. `abandoned` \/ `short` \/ `long` are auto-derived from the transcript when the interview is recorded; `off-topic` is set manually. Sending `tags` on an update replaces the whole list — pass the full desired set, not a delta.'
+            'Searchable classifications on the response. `abandoned` \/ `short` \/ `long` are auto-derived from the transcript when the interview is recorded; `off-topic` is set manually. Sending `classifications` on an update replaces the whole list — pass the full desired set, not a delta.'
         ),
     audio: zod.url(),
 })
@@ -286,7 +286,7 @@ export const userInterviewsPartialUpdateBodyIntervieweeEmailsItemMax = 254
 export const UserInterviewsPartialUpdateBody = /* @__PURE__ */ zod.object({
     interviewee_emails: zod.array(zod.string().max(userInterviewsPartialUpdateBodyIntervieweeEmailsItemMax)).optional(),
     summary: zod.string().optional(),
-    tags: zod
+    classifications: zod
         .array(
             zod
                 .enum(['abandoned', 'short', 'off-topic', 'long'])
@@ -296,7 +296,7 @@ export const UserInterviewsPartialUpdateBody = /* @__PURE__ */ zod.object({
         )
         .optional()
         .describe(
-            'Searchable labels on the response. `abandoned` \/ `short` \/ `long` are auto-derived from the transcript when the interview is recorded; `off-topic` is set manually. Sending `tags` on an update replaces the whole list — pass the full desired set, not a delta.'
+            'Searchable classifications on the response. `abandoned` \/ `short` \/ `long` are auto-derived from the transcript when the interview is recorded; `off-topic` is set manually. Sending `classifications` on an update replaces the whole list — pass the full desired set, not a delta.'
         ),
     audio: zod.url().optional(),
 })
@@ -325,7 +325,7 @@ export const UserInterviewsSearchCreateBody = /* @__PURE__ */ zod.object({
         .uuid()
         .nullish()
         .describe('Optional. Restrict results to interviews belonging to a specific UserInterviewTopic.'),
-    tags: zod
+    classifications: zod
         .array(
             zod
                 .enum(['abandoned', 'short', 'off-topic', 'long'])
@@ -336,7 +336,7 @@ export const UserInterviewsSearchCreateBody = /* @__PURE__ */ zod.object({
         .min(1)
         .optional()
         .describe(
-            'Optional. Restrict results to interviews carrying any of these tags (OR). Combines with `topic_id` as AND.'
+            'Optional. Restrict results to interviews carrying any of these classifications (OR). Combines with `topic_id` as AND.'
         ),
     limit: zod
         .number()

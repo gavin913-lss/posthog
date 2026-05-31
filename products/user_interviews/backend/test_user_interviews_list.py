@@ -33,7 +33,7 @@ class TestUserInterviewsListFilters(APIBaseTest):
         topic: UserInterviewTopic | None,
         summary: str,
         team: Team | None = None,
-        tags: list[str] | None = None,
+        classifications: list[str] | None = None,
     ) -> UserInterview:
         return UserInterview.objects.create(
             team=team or self.team,
@@ -42,7 +42,7 @@ class TestUserInterviewsListFilters(APIBaseTest):
             transcript="Hello world",
             summary=summary,
             topic=topic,
-            tags=tags or [],
+            classifications=classifications or [],
         )
 
     @parameterized.expand(
@@ -91,48 +91,50 @@ class TestUserInterviewsListFilters(APIBaseTest):
 
     @parameterized.expand(
         [
-            ("no tag filter returns all", None, {"abandoned-one", "short-one", "long-one", "untagged"}),
-            ("single tag", "abandoned", {"abandoned-one"}),
-            ("multiple tags are OR", "abandoned,long", {"abandoned-one", "long-one"}),
-            ("tag with no matches", "off-topic", set()),
+            ("no classification filter returns all", None, {"abandoned-one", "short-one", "long-one", "unclassified"}),
+            ("single classification", "abandoned", {"abandoned-one"}),
+            ("multiple classifications are OR", "abandoned,long", {"abandoned-one", "long-one"}),
+            ("classification with no matches", "off-topic", set()),
         ]
     )
-    def test_tags_filter(self, _name: str, tags_param: str | None, expected_summaries: set[str]) -> None:
-        topic = self._create_topic("Tagged topic")
-        self._create_interview(topic=topic, summary="abandoned-one", tags=["abandoned"])
-        self._create_interview(topic=topic, summary="short-one", tags=["short"])
-        self._create_interview(topic=topic, summary="long-one", tags=["long"])
-        self._create_interview(topic=topic, summary="untagged", tags=[])
+    def test_classifications_filter(
+        self, _name: str, classifications_param: str | None, expected_summaries: set[str]
+    ) -> None:
+        topic = self._create_topic("Classified topic")
+        self._create_interview(topic=topic, summary="abandoned-one", classifications=["abandoned"])
+        self._create_interview(topic=topic, summary="short-one", classifications=["short"])
+        self._create_interview(topic=topic, summary="long-one", classifications=["long"])
+        self._create_interview(topic=topic, summary="unclassified", classifications=[])
 
-        params = {} if tags_param is None else {"tags": tags_param}
+        params = {} if classifications_param is None else {"classifications": classifications_param}
         response = self.client.get(self._list_url(), params)
 
         assert response.status_code == status.HTTP_200_OK, response.content
         summaries = {row["summary"] for row in response.json()["results"]}
         assert summaries == expected_summaries
 
-    def test_partial_update_replaces_tags(self) -> None:
-        topic = self._create_topic("Tagged topic")
-        interview = self._create_interview(topic=topic, summary="resp", tags=["short"])
+    def test_partial_update_replaces_classifications(self) -> None:
+        topic = self._create_topic("Classified topic")
+        interview = self._create_interview(topic=topic, summary="resp", classifications=["short"])
 
         response = self.client.patch(
             f"{self._list_url()}{interview.id}/",
-            {"tags": ["off-topic", "long"]},
+            {"classifications": ["off-topic", "long"]},
             format="json",
         )
 
         assert response.status_code == status.HTTP_200_OK, response.content
-        assert set(response.json()["tags"]) == {"off-topic", "long"}
+        assert set(response.json()["classifications"]) == {"off-topic", "long"}
         interview.refresh_from_db()
-        assert set(interview.tags) == {"off-topic", "long"}
+        assert set(interview.classifications) == {"off-topic", "long"}
 
-    def test_partial_update_rejects_unknown_tag(self) -> None:
-        topic = self._create_topic("Tagged topic")
-        interview = self._create_interview(topic=topic, summary="resp", tags=[])
+    def test_partial_update_rejects_unknown_classification(self) -> None:
+        topic = self._create_topic("Classified topic")
+        interview = self._create_interview(topic=topic, summary="resp", classifications=[])
 
         response = self.client.patch(
             f"{self._list_url()}{interview.id}/",
-            {"tags": ["bogus"]},
+            {"classifications": ["bogus"]},
             format="json",
         )
 

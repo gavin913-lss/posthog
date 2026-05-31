@@ -22,7 +22,7 @@ class EmailWithDisplayNameValidator:
         return validators.validate_email(value)
 
 
-class UserInterviewTag(models.TextChoices):
+class UserInterviewClassification(models.TextChoices):
     ABANDONED = "abandoned", "Abandoned"
     SHORT = "short", "Short"
     OFF_TOPIC = "off-topic", "Off-topic"
@@ -36,8 +36,8 @@ class UserInterview(UUIDTModel, CreatedMetaFields):
     )
     transcript = models.TextField(blank=True)
     summary = models.TextField(blank=True)
-    tags = ArrayField(
-        models.CharField(max_length=20, choices=UserInterviewTag.choices),
+    classifications = ArrayField(
+        models.CharField(max_length=20, choices=UserInterviewClassification.choices),
         default=list,
         blank=True,
     )

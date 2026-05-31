@@ -40,8 +40,8 @@ from posthog.models.team import Team
 from posthog.rate_limit import IPThrottle
 from posthog.storage.llm_prompt_cache import get_prompt_by_name_from_cache
 
+from ..classification import derive_auto_classifications
 from ..models import UserInterview, UserInterviewTopic
-from ..tagging import derive_auto_tags
 
 logger = structlog.get_logger(__name__)
 
@@ -513,7 +513,7 @@ def vapi_webhook(request: Request) -> Response:
             recording_url=recording_url,
             call_metadata=call,
             created_by=topic.created_by,
-            tags=derive_auto_tags(transcript),
+            classifications=derive_auto_classifications(transcript),
         )
         transaction.on_commit(lambda: _emit_interview_embeddings(interview, topic))
 
