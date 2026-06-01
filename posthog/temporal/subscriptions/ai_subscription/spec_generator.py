@@ -32,7 +32,6 @@ NO_DATA_EVENT_NAMES_LIMIT = 25
 PERSON_PROPERTY_NAMES_LIMIT = 30
 EVENT_NAME_MAX_LENGTH = 120
 
-# gpt-5 models only support the default temperature (1), so callers omit the temperature arg
 DEFAULT_PLANNER_MODEL = "gpt-5-mini"
 DEFAULT_SYNTHESIS_MODEL = "gpt-5-mini"
 _PLANNER_LLM_TIMEOUT_SECONDS = 90.0

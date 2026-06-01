@@ -19,7 +19,6 @@ class QueryPlan(BaseModel):
 
 
 class EnrichedPromptSpec(BaseModel):
-    # built and consumed entirely within generate_ai_report — never crosses a Temporal payload boundary
     cleaned_prompt: str
     context_blob: str
     plan: QueryPlan

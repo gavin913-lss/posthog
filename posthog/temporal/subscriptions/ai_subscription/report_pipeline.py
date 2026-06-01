@@ -182,7 +182,6 @@ async def _synthesize(
         billable=True,
         posthog_properties=posthog_properties,
     )
-    # resolve_prompt is sync and may hit the DB on a hypercache miss; keep it off the event loop
     synthesis_prompt = await database_sync_to_async(resolve_prompt, thread_sensitive=False)(
         team, SYNTHESIS_PROMPT_NAME, AI_SUBSCRIPTION_SYNTHESIS_PROMPT
     )
