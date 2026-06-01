@@ -23,6 +23,7 @@ from products.replay_vision.backend.temporal.schedule import (
     a_upsert_scanner_schedule,
     compute_schedule_fingerprint,
 )
+from products.replay_vision.backend.temporal.sweep_types import SweepScannerInputs
 
 
 def _make_scanner(**overrides) -> ReplayScanner:
@@ -102,6 +103,7 @@ def test_build_schedule_carries_scanner_inputs_and_offset() -> None:
     assert isinstance(action, ScheduleActionStartWorkflow)
     assert action.workflow == "replay-vision-sweep-scanner"
     inputs = action.args[0]
+    assert isinstance(inputs, SweepScannerInputs)
     assert inputs.scanner_id == scanner_id
     assert inputs.team_id == 99
     assert schedule.spec.intervals[0].every == SCANNER_SCHEDULE_INTERVAL
