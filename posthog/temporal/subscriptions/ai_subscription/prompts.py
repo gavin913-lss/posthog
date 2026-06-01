@@ -2,26 +2,20 @@ from typing import Literal
 
 import structlog
 
-from posthog.cloud_utils import is_cloud
 from posthog.models import Team
 from posthog.ph_client import ph_scoped_capture
 from posthog.storage.llm_prompt_cache import get_prompt_by_name_from_cache
 
 logger = structlog.get_logger(__name__)
 
-# LLMPrompt names teams author in the Prompt product to override the code defaults below. These match
-# the prompts authored in the dogfooding project; a team-authored prompt of the same name wins.
+# LLMPrompt names a team can author in the Prompt product to override the code defaults below.
 PLANNER_PROMPT_NAME = "ai-subscription-planner"
 SYNTHESIS_PROMPT_NAME = "ai-subscription-synthesis"
 HOGQL_FIX_PROMPT_NAME = "ai-subscription-hogql-fix"
 
 
 def _capture_prompt_source(team: Team, name: str, source: Literal["managed", "fallback"]) -> None:
-    # Emit a PostHog event (rather than just a Prometheus counter) so a silent fallback — e.g. a
-    # managed prompt that stops resolving after a rename — surfaces in analytics where Max can flag it.
-    # Capture must never break report generation, so it's best-effort.
-    if not is_cloud():
-        return
+    # Best-effort: a capture failure must never break report generation.
     try:
         with ph_scoped_capture() as capture:
             capture(
