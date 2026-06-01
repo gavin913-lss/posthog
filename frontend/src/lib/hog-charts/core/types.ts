@@ -238,11 +238,11 @@ export interface BarsConfig {
      *  stay visually comparable. Ignored for `barLayout: 'percent'`, which is already `[0, 1]`. */
     valueDomain?: [number, number]
     /** Stacked layouts only — round both *outer* ends of the whole stack so it reads as one pill,
-     *  rather than only the topmost segment's cap. Per band, the bottom-most non-zero segment
-     *  rounds its baseline end and the topmost non-zero segment rounds its cap end. Picking the
-     *  topmost *non-zero* segment (not just the series-level top of stack) is what keeps a fully
-     *  filled bar — e.g. a 100% funnel step whose drop-off filler is zero-width — rounded on both
-     *  ends instead of square. Defaults to `false`. */
+     *  rather than only the topmost segment's cap. Implemented by clipping the bar layer to a
+     *  rounded rect spanning each band's full extent and drawing the segments square, so the outer
+     *  corners round at the full `cornerRadius` even when the edge segment is a thin sliver (e.g.
+     *  the last breakdown of a near-100% funnel step) — which per-segment rounding can't, as it
+     *  clamps the radius to the sliver's half-width. Defaults to `false`. */
     roundStackEnds?: boolean
 }
 
