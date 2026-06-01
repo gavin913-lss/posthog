@@ -1,10 +1,12 @@
 import uuid
 import datetime as dt
+from contextlib import contextmanager
 from typing import Any
 
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
+from asgiref.sync import sync_to_async
 from temporalio.client import ScheduleActionStartWorkflow
 
 from posthog.models import Organization, Team
@@ -25,6 +27,8 @@ from products.replay_vision.backend.temporal.schedule import (
 )
 from products.replay_vision.backend.temporal.sweep_types import SweepScannerInputs
 
+_MODULE = "products.replay_vision.backend.temporal.schedule"
+
 
 def _make_scanner(**overrides) -> ReplayScanner:
     org = Organization.objects.create(name="vision-schedule-test-org")
@@ -40,15 +44,24 @@ def _make_scanner(**overrides) -> ReplayScanner:
     return ReplayScanner.objects.create(**defaults)
 
 
-# scanner_schedule_id
+@contextmanager
+def _patched_temporal(*, exists: bool, delete_side_effect: BaseException | None = None):
+    create = AsyncMock()
+    update = AsyncMock()
+    delete = AsyncMock(side_effect=delete_side_effect)
+    with (
+        patch(f"{_MODULE}.async_connect", AsyncMock(return_value=MagicMock())),
+        patch(f"{_MODULE}.a_schedule_exists", AsyncMock(return_value=exists)) as exists_mock,
+        patch(f"{_MODULE}.a_create_schedule", create),
+        patch(f"{_MODULE}.a_update_schedule", update),
+        patch(f"{_MODULE}.a_delete_schedule", delete),
+    ):
+        yield exists_mock, create, update, delete
 
 
 def test_schedule_id_format() -> None:
-    sid = uuid.UUID("c2 32d230-484b-4342-8d88-c70718a796b7".replace(" ", ""))
+    sid = uuid.UUID("c232d230-484b-4342-8d88-c70718a796b7")
     assert scanner_schedule_id(sid) == f"{SCANNER_SCHEDULE_ID_PREFIX}-{sid}"
-
-
-# _compute_offset
 
 
 def test_offset_is_deterministic_per_scanner() -> None:
@@ -64,12 +77,8 @@ def test_offset_within_interval() -> None:
 
 
 def test_offset_distributes_across_window() -> None:
-    # 100 random scanners should spread across the window; collisions are fine but full clustering is not.
     offsets = {_compute_offset(uuid.uuid4()).total_seconds() for _ in range(100)}
-    assert len(offsets) > 50  # not all colliding
-
-
-# compute_schedule_fingerprint
+    assert len(offsets) > 50
 
 
 def test_fingerprint_stable_across_calls() -> None:
@@ -78,22 +87,15 @@ def test_fingerprint_stable_across_calls() -> None:
 
 
 def test_fingerprint_key_order_independent() -> None:
-    a = {"x": 1, "y": 2}
-    b = {"y": 2, "x": 1}
-    assert compute_schedule_fingerprint(a) == compute_schedule_fingerprint(b)
+    assert compute_schedule_fingerprint({"x": 1, "y": 2}) == compute_schedule_fingerprint({"y": 2, "x": 1})
 
 
 def test_fingerprint_changes_on_field_change() -> None:
-    base = {"scanner_version": 1, "enabled": True}
-    bumped = {"scanner_version": 2, "enabled": True}
-    assert compute_schedule_fingerprint(base) != compute_schedule_fingerprint(bumped)
+    assert compute_schedule_fingerprint({"scanner_version": 1}) != compute_schedule_fingerprint({"scanner_version": 2})
 
 
 def test_fingerprint_handles_none() -> None:
     assert compute_schedule_fingerprint(None) == compute_schedule_fingerprint({})
-
-
-# _build_schedule
 
 
 def test_build_schedule_carries_scanner_inputs_and_offset() -> None:
@@ -110,126 +112,66 @@ def test_build_schedule_carries_scanner_inputs_and_offset() -> None:
     assert schedule.spec.intervals[0].offset == _compute_offset(scanner_id)
 
 
-# a_upsert_scanner_schedule
-
-
 @pytest.mark.django_db(transaction=True)
 @pytest.mark.asyncio
 async def test_upsert_creates_when_missing() -> None:
-    from asgiref.sync import sync_to_async
-
     scanner = await sync_to_async(_make_scanner)()
-    client = MagicMock()
-    create_mock = AsyncMock()
-    update_mock = AsyncMock()
-    with (
-        patch("products.replay_vision.backend.temporal.schedule.async_connect", AsyncMock(return_value=client)),
-        patch("products.replay_vision.backend.temporal.schedule.a_schedule_exists", AsyncMock(return_value=False)),
-        patch("products.replay_vision.backend.temporal.schedule.a_create_schedule", create_mock),
-        patch("products.replay_vision.backend.temporal.schedule.a_update_schedule", update_mock),
-    ):
+    with _patched_temporal(exists=False) as (_exists, create, update, _delete):
         await a_upsert_scanner_schedule(scanner.id, scanner.team_id)
-    create_mock.assert_awaited_once()
-    update_mock.assert_not_awaited()
-    assert create_mock.call_args.kwargs["trigger_immediately"] is True
-    search_attrs = create_mock.call_args.kwargs["search_attributes"]
-    keys = {pair.key.name for pair in search_attrs}
+    create.assert_awaited_once()
+    update.assert_not_awaited()
+    assert create.call_args.kwargs["trigger_immediately"] is True
+    keys = {pair.key.name for pair in create.call_args.kwargs["search_attributes"]}
     assert {"PostHogTeamId", "PostHogScheduleType", "PostHogScheduleFingerprint"} <= keys
 
 
 @pytest.mark.django_db(transaction=True)
 @pytest.mark.asyncio
 async def test_upsert_updates_when_present() -> None:
-    from asgiref.sync import sync_to_async
-
     scanner = await sync_to_async(_make_scanner)()
-    client = MagicMock()
-    create_mock = AsyncMock()
-    update_mock = AsyncMock()
-    with (
-        patch("products.replay_vision.backend.temporal.schedule.async_connect", AsyncMock(return_value=client)),
-        patch("products.replay_vision.backend.temporal.schedule.a_schedule_exists", AsyncMock(return_value=True)),
-        patch("products.replay_vision.backend.temporal.schedule.a_create_schedule", create_mock),
-        patch("products.replay_vision.backend.temporal.schedule.a_update_schedule", update_mock),
-    ):
+    with _patched_temporal(exists=True) as (_exists, create, update, _delete):
         await a_upsert_scanner_schedule(scanner.id, scanner.team_id)
-    update_mock.assert_awaited_once()
-    create_mock.assert_not_awaited()
+    update.assert_awaited_once()
+    create.assert_not_awaited()
 
 
 @pytest.mark.django_db(transaction=True)
 @pytest.mark.asyncio
 async def test_upsert_no_ops_when_scanner_missing() -> None:
-    client = MagicMock()
-    with (
-        patch("products.replay_vision.backend.temporal.schedule.async_connect", AsyncMock(return_value=client)),
-        patch(
-            "products.replay_vision.backend.temporal.schedule.a_schedule_exists", AsyncMock(return_value=False)
-        ) as exists_mock,
-        patch("products.replay_vision.backend.temporal.schedule.a_create_schedule", AsyncMock()) as create_mock,
-    ):
+    with _patched_temporal(exists=False) as (exists, create, _update, _delete):
         await a_upsert_scanner_schedule(uuid.uuid4(), team_id=99)
-    exists_mock.assert_not_awaited()
-    create_mock.assert_not_awaited()
+    exists.assert_not_awaited()
+    create.assert_not_awaited()
 
 
 @pytest.mark.django_db(transaction=True)
 @pytest.mark.asyncio
 async def test_upsert_stamps_fingerprint_attribute() -> None:
-    from asgiref.sync import sync_to_async
-
     scanner = await sync_to_async(_make_scanner)()
-    create_mock = AsyncMock()
-    with (
-        patch("products.replay_vision.backend.temporal.schedule.async_connect", AsyncMock(return_value=MagicMock())),
-        patch("products.replay_vision.backend.temporal.schedule.a_schedule_exists", AsyncMock(return_value=False)),
-        patch("products.replay_vision.backend.temporal.schedule.a_create_schedule", create_mock),
-    ):
+    with _patched_temporal(exists=False) as (_exists, create, _update, _delete):
         await a_upsert_scanner_schedule(scanner.id, scanner.team_id)
-    search_attrs = create_mock.call_args.kwargs["search_attributes"]
-    pairs = {pair.key.name: pair.value for pair in search_attrs}
+    pairs = {pair.key.name: pair.value for pair in create.call_args.kwargs["search_attributes"]}
     assert pairs["PostHogTeamId"] == scanner.team_id
     assert pairs["PostHogScheduleType"] == SCANNER_SCHEDULE_TYPE
-    assert isinstance(pairs["PostHogScheduleFingerprint"], str) and len(pairs["PostHogScheduleFingerprint"]) > 0
-
-
-# a_delete_scanner_schedule
+    assert isinstance(pairs["PostHogScheduleFingerprint"], str) and pairs["PostHogScheduleFingerprint"]
 
 
 @pytest.mark.asyncio
 async def test_delete_is_noop_when_schedule_missing() -> None:
-    client = MagicMock()
-    delete_mock = AsyncMock()
-    with (
-        patch("products.replay_vision.backend.temporal.schedule.async_connect", AsyncMock(return_value=client)),
-        patch("products.replay_vision.backend.temporal.schedule.a_schedule_exists", AsyncMock(return_value=False)),
-        patch("products.replay_vision.backend.temporal.schedule.a_delete_schedule", delete_mock),
-    ):
+    with _patched_temporal(exists=False) as (_exists, _create, _update, delete):
         await a_delete_scanner_schedule(uuid.uuid4())
-    delete_mock.assert_not_awaited()
+    delete.assert_not_awaited()
 
 
 @pytest.mark.asyncio
 async def test_delete_calls_delete_when_present() -> None:
-    client = MagicMock()
-    delete_mock = AsyncMock()
-    with (
-        patch("products.replay_vision.backend.temporal.schedule.async_connect", AsyncMock(return_value=client)),
-        patch("products.replay_vision.backend.temporal.schedule.a_schedule_exists", AsyncMock(return_value=True)),
-        patch("products.replay_vision.backend.temporal.schedule.a_delete_schedule", delete_mock),
-    ):
+    with _patched_temporal(exists=True) as (_exists, _create, _update, delete):
         await a_delete_scanner_schedule(uuid.uuid4())
-    delete_mock.assert_awaited_once()
+    delete.assert_awaited_once()
 
 
 @pytest.mark.asyncio
 async def test_delete_swallows_race_exceptions() -> None:
-    client = MagicMock()
-    delete_mock = AsyncMock(side_effect=RuntimeError("race"))
-    with (
-        patch("products.replay_vision.backend.temporal.schedule.async_connect", AsyncMock(return_value=client)),
-        patch("products.replay_vision.backend.temporal.schedule.a_schedule_exists", AsyncMock(return_value=True)),
-        patch("products.replay_vision.backend.temporal.schedule.a_delete_schedule", delete_mock),
-    ):
-        # Must not raise; the reconciler treats delete as best-effort.
+    # Must not raise; the reconciler treats delete as best-effort.
+    with _patched_temporal(exists=True, delete_side_effect=RuntimeError("race")):
         await a_delete_scanner_schedule(uuid.uuid4())

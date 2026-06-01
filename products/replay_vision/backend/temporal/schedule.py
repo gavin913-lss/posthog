@@ -41,7 +41,7 @@ from products.replay_vision.backend.temporal.sweep_types import SweepScannerInpu
 
 logger = structlog.get_logger(__name__)
 
-# Fields that change the scanner's observable output; the reconciler restamps the schedule whenever this set changes.
+# Scanner row fields whose change should retrigger the schedule via fingerprint drift.
 _FINGERPRINT_FIELDS = (
     "scanner_version",
     "enabled",
@@ -58,13 +58,8 @@ def compute_schedule_fingerprint(snapshot: dict[str, Any] | None) -> str:
     return hashlib.sha256(canonical.encode()).hexdigest()[:16]
 
 
-def _snapshot_scanner(scanner_id: UUID) -> dict[str, Any] | None:
-    row = ReplayScanner.objects.filter(pk=scanner_id).values(*_FINGERPRINT_FIELDS).first()
-    return dict(row) if row else None
-
-
 def _compute_offset(scanner_id: UUID) -> dt.timedelta:
-    # UUID.int is stable across processes; the modulo distributes fires uniformly across the window.
+    # UUID.int is stable across processes; modulo distributes fires uniformly across the window.
     interval_s = int(SCANNER_SCHEDULE_INTERVAL.total_seconds())
     return dt.timedelta(seconds=scanner_id.int % interval_s)
 
@@ -86,27 +81,28 @@ def _build_schedule(scanner_id: UUID, team_id: int) -> Schedule:
     )
 
 
-def _build_search_attributes(scanner_id: UUID, team_id: int, fingerprint: str) -> TypedSearchAttributes:
-    return TypedSearchAttributes(
-        search_attributes=[
-            SearchAttributePair(key=POSTHOG_TEAM_ID_KEY, value=team_id),
-            SearchAttributePair(key=POSTHOG_SCHEDULE_TYPE_KEY, value=SCANNER_SCHEDULE_TYPE),
-            SearchAttributePair(key=POSTHOG_SCHEDULE_FINGERPRINT_KEY, value=fingerprint),
-        ]
-    )
+def _load_fingerprint(scanner_id: UUID) -> str | None:
+    row = ReplayScanner.objects.filter(pk=scanner_id).values(*_FINGERPRINT_FIELDS).first()
+    return compute_schedule_fingerprint(dict(row)) if row else None
 
 
 async def a_upsert_scanner_schedule(scanner_id: UUID, team_id: int) -> None:
     """Create or update the per-scanner schedule. No-op when the scanner row is gone."""
-    snapshot = await database_sync_to_async(_snapshot_scanner)(scanner_id)
-    if snapshot is None:
+    fingerprint = await database_sync_to_async(_load_fingerprint)(scanner_id)
+    if fingerprint is None:
         logger.info("replay_vision.upsert_schedule.scanner_missing", scanner_id=str(scanner_id))
         return
 
     client = await async_connect()
     schedule_id = scanner_schedule_id(scanner_id)
     schedule = _build_schedule(scanner_id, team_id)
-    search_attributes = _build_search_attributes(scanner_id, team_id, compute_schedule_fingerprint(snapshot))
+    search_attributes = TypedSearchAttributes(
+        search_attributes=[
+            SearchAttributePair(key=POSTHOG_TEAM_ID_KEY, value=team_id),
+            SearchAttributePair(key=POSTHOG_SCHEDULE_TYPE_KEY, value=SCANNER_SCHEDULE_TYPE),
+            SearchAttributePair(key=POSTHOG_SCHEDULE_FINGERPRINT_KEY, value=fingerprint),
+        ]
+    )
 
     if await a_schedule_exists(client, schedule_id):
         await a_update_schedule(client, schedule_id, schedule, search_attributes=search_attributes)
