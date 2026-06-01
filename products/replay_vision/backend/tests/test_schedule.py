@@ -5,6 +5,8 @@ from typing import Any
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
+from temporalio.client import ScheduleActionStartWorkflow
+
 from posthog.models import Organization, Team
 
 from products.replay_vision.backend.models.replay_scanner import ReplayScanner, ScannerModel, ScannerType
@@ -96,8 +98,10 @@ def test_fingerprint_handles_none() -> None:
 def test_build_schedule_carries_scanner_inputs_and_offset() -> None:
     scanner_id = uuid.uuid4()
     schedule = _build_schedule(scanner_id, team_id=99)
-    assert schedule.action.workflow == "replay-vision-sweep-scanner"
-    inputs = schedule.action.args[0]
+    action = schedule.action
+    assert isinstance(action, ScheduleActionStartWorkflow)
+    assert action.workflow == "replay-vision-sweep-scanner"
+    inputs = action.args[0]
     assert inputs.scanner_id == scanner_id
     assert inputs.team_id == 99
     assert schedule.spec.intervals[0].every == SCANNER_SCHEDULE_INTERVAL
