@@ -6,6 +6,14 @@ import { DEFAULT_Y_AXIS_ID } from '../../../core/types'
 
 export type BarLayout = 'stacked' | 'grouped' | 'percent'
 
+/** Per-band series keys for the bottom-most and topmost non-zero stack segments, keyed by band
+ *  index. Drives `roundStackEnds`: the `bottom` segment rounds its baseline end, the `top` one its
+ *  cap end. `null` at an index means no renderable segment there. */
+export interface StackEndKeys {
+    bottom: (string | null)[]
+    top: (string | null)[]
+}
+
 export function isStackedLayout(layout: BarLayout): boolean {
     return layout !== 'grouped'
 }
@@ -55,6 +63,9 @@ export interface BarsAtCursorArgs {
     isHorizontal: boolean
     stackedData?: Map<string, StackedBand>
     topStackedKeyByAxis: Map<string, string>
+    /** When set, mirrors `BarChart`'s `roundStackEnds` so hover/highlight rects round the same
+     *  ends as the resting bar. Omitted on hit-test-only paths, where corners don't matter. */
+    stackEndKeysByAxis?: Map<string, StackEndKeys>
 }
 
 export interface BarAtCursor<S> {
@@ -68,7 +79,17 @@ export interface BarAtCursor<S> {
 export function* iterBarsAtCursor<S extends Pick<Series, 'key' | 'visibility' | 'yAxisId' | 'data'>>(
     args: Omit<BarsAtCursorArgs, 'series'> & { series: readonly S[] }
 ): Generator<BarAtCursor<S>> {
-    const { series, label, dataIndex, scales, layout, isHorizontal, stackedData, topStackedKeyByAxis } = args
+    const {
+        series,
+        label,
+        dataIndex,
+        scales,
+        layout,
+        isHorizontal,
+        stackedData,
+        topStackedKeyByAxis,
+        stackEndKeysByAxis,
+    } = args
     for (const s of series) {
         if (s.visibility?.excluded) {
             continue
@@ -76,6 +97,7 @@ export function* iterBarsAtCursor<S extends Pick<Series, 'key' | 'visibility' | 
         const stackedBand = stackedData?.get(s.key)
         const axisId = s.yAxisId ?? DEFAULT_Y_AXIS_ID
         const isTopOfStack = topStackedKeyByAxis.get(axisId) === s.key
+        const ends = stackEndKeysByAxis?.get(axisId)
         const bar = computeBarAtIndex({
             series: s as unknown as Series,
             label,
@@ -85,6 +107,8 @@ export function* iterBarsAtCursor<S extends Pick<Series, 'key' | 'visibility' | 
             isHorizontal,
             stackedBand,
             isTopOfStack,
+            capRounded: ends ? ends.top[dataIndex] === s.key : undefined,
+            baseRounded: ends ? ends.bottom[dataIndex] === s.key : undefined,
         })
         if (bar) {
             yield { series: s, bar }

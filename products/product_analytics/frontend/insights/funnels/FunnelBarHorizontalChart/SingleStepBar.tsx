@@ -33,12 +33,13 @@ const CHART_CONFIG: BarChartConfig = {
     showGrid: false,
     animateHover: true,
     margins: { top: 0, right: 0, bottom: 0, left: 0 },
-    tooltip: { placement: 'top' },
+    tooltip: { placement: 'cursor' },
     bars: {
         cornerRadius: BAR_CORNER_RADIUS,
         bandPadding: 0,
         minBandSize: 0,
         valueDomain: FUNNEL_BAR_HORIZONTAL_VALUE_DOMAIN,
+        roundStackEnds: true,
     },
 }
 

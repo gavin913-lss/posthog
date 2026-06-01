@@ -237,6 +237,13 @@ export interface BarsConfig {
      *  charts that share a logical scale (e.g. one single-bar chart per funnel step, all `0–100`)
      *  stay visually comparable. Ignored for `barLayout: 'percent'`, which is already `[0, 1]`. */
     valueDomain?: [number, number]
+    /** Stacked layouts only — round both *outer* ends of the whole stack so it reads as one pill,
+     *  rather than only the topmost segment's cap. Per band, the bottom-most non-zero segment
+     *  rounds its baseline end and the topmost non-zero segment rounds its cap end. Picking the
+     *  topmost *non-zero* segment (not just the series-level top of stack) is what keeps a fully
+     *  filled bar — e.g. a 100% funnel step whose drop-off filler is zero-width — rounded on both
+     *  ends instead of square. Defaults to `false`. */
+    roundStackEnds?: boolean
 }
 
 export interface BarChartConfig extends ChartConfig {

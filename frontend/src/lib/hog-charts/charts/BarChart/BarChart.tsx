@@ -51,6 +51,7 @@ import {
     findVisibleStackedSegment,
     iterBarsAtCursor,
     isStackedLayout,
+    type StackEndKeys,
 } from './utils/bars-under-cursor'
 
 function bandCenter(scales: BarChartPrivate['__barChart'], label: string): number | undefined {
@@ -137,6 +138,7 @@ function BarChartInner<Meta = unknown>({
         bandPadding,
         minBandSize,
         valueDomain,
+        roundStackEnds = false,
     } = config?.bars ?? {}
     const isHorizontal = axisOrientation === 'horizontal'
 
@@ -179,6 +181,39 @@ function BarChartInner<Meta = unknown>({
         }
         return m
     }, [barLayout, series])
+
+    // For `roundStackEnds`: per axis, the bottom-most and topmost *non-zero* series key at each
+    // band. Series iterate bottom-to-top in stack order, so the first non-zero write per band is
+    // the baseline end and the last is the cap end. Skipping zero-value segments keeps a fully
+    // filled bar (e.g. a 100% funnel step with a zero-width filler) rounded rather than square.
+    const stackEndKeysByAxis = useMemo<Map<string, StackEndKeys> | undefined>(() => {
+        if (!roundStackEnds || barLayout === 'grouped') {
+            return undefined
+        }
+        const byAxis = new Map<string, StackEndKeys>()
+        for (const s of series) {
+            if (s.visibility?.excluded) {
+                continue
+            }
+            const axisId = s.yAxisId ?? DEFAULT_Y_AXIS_ID
+            let ends = byAxis.get(axisId)
+            if (!ends) {
+                ends = { bottom: new Array(labels.length).fill(null), top: new Array(labels.length).fill(null) }
+                byAxis.set(axisId, ends)
+            }
+            for (let i = 0; i < labels.length; i++) {
+                const raw = s.data[i]
+                if (raw == null || !isFinite(raw) || raw <= 0) {
+                    continue
+                }
+                if (ends.bottom[i] === null) {
+                    ends.bottom[i] = s.key
+                }
+                ends.top[i] = s.key
+            }
+        }
+        return byAxis
+    }, [roundStackEnds, barLayout, series, labels])
 
     const chartConfig = useMemo<BarChartConfig>(() => {
         const base = { ...config, isPercent: barLayout === 'percent' }
@@ -328,6 +363,7 @@ function BarChartInner<Meta = unknown>({
                 .filter((s) => !s.visibility?.excluded)
                 .map((s) => {
                     const axisId = s.yAxisId ?? DEFAULT_Y_AXIS_ID
+                    const ends = stackEndKeysByAxis?.get(axisId)
                     const bars = computeSeriesBars({
                         series: s,
                         labels: drawLabels,
@@ -336,6 +372,8 @@ function BarChartInner<Meta = unknown>({
                         isHorizontal,
                         stackedBand: stackedData?.get(s.key),
                         isTopOfStack: topStackedKeyByAxis.get(axisId) === s.key,
+                        capRoundedAtIndex: ends ? (i) => ends.top[i] === s.key : undefined,
+                        baseRoundedAtIndex: ends ? (i) => ends.bottom[i] === s.key : undefined,
                     }).filter((b): b is BarRect => b !== null)
                     return { series: s, bars }
                 })
@@ -377,6 +415,7 @@ function BarChartInner<Meta = unknown>({
             barLayout,
             isHorizontal,
             topStackedKeyByAxis,
+            stackEndKeysByAxis,
             barCornerRadius,
             barTrack,
             xTickFormatter,
@@ -424,6 +463,7 @@ function BarChartInner<Meta = unknown>({
                     isHorizontal,
                     stackedData,
                     topStackedKeyByAxis,
+                    stackEndKeysByAxis,
                 })
                 if (visible) {
                     const visibleExtent = isHorizontal ? visible.bar.width : visible.bar.height
@@ -446,6 +486,7 @@ function BarChartInner<Meta = unknown>({
                     isHorizontal,
                     stackedData,
                     topStackedKeyByAxis,
+                    stackEndKeysByAxis,
                 })) {
                     if (hoverPosition && !barContainsPointOnBandAxis(bar, hoverPosition, isHorizontal)) {
                         continue
@@ -497,7 +538,7 @@ function BarChartInner<Meta = unknown>({
             ctx.restore()
             return true
         },
-        [stackedData, barLayout, isHorizontal, topStackedKeyByAxis, barCornerRadius, barTrack]
+        [stackedData, barLayout, isHorizontal, topStackedKeyByAxis, stackEndKeysByAxis, barCornerRadius, barTrack]
     )
 
     // Show each series's own segment value (resolveValue) but anchor the tooltip/value labels
