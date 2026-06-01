@@ -50,11 +50,10 @@ class TestAIReportPipelineIntegration(ClickhouseTestMixin, NonAtomicBaseTest):
     # Combined into a single test method: NonAtomicBaseTest doesn't roll back Postgres state
     # between test methods in the same class, so per-method org/membership creates collide.
     # Two assertions in one test gives reliable isolation while keeping both flows covered.
-    @patch(f"{_RP}._capture_report_quality")
     @patch(f"{_RP}.MaxChatOpenAI")
     @patch(f"{_RP}.build_enriched_prompt")
     async def test_real_hogql_flows_into_synthesis_and_invalid_hogql_degrades(
-        self, mock_bep: MagicMock, mock_chat: MagicMock, mock_capture: MagicMock
+        self, mock_bep: MagicMock, mock_chat: MagicMock
     ) -> None:
         # --- happy path: planned HogQL runs for real, results reach synthesis ---
         mock_bep.return_value = self._spec("SELECT event, count() AS c FROM events GROUP BY event ORDER BY c DESC")

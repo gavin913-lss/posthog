@@ -13,7 +13,8 @@ from posthog.hogql.errors import ExposedHogQLError, InternalHogQLError
 
 from posthog.exceptions_capture import capture_exception
 from posthog.models import Team, User
-from posthog.ph_client import ph_scoped_capture
+from posthog.slo.context import SloSpec, slo_operation
+from posthog.slo.types import SloArea, SloOperation
 from posthog.sync import database_sync_to_async
 from posthog.temporal.subscriptions.ai_subscription.prompts import (
     AI_SUBSCRIPTION_SYNTHESIS_PROMPT,
@@ -87,12 +88,45 @@ async def generate_ai_report(
     if user is None:
         raise PromptRejectedError("AI report must have a user to run.")
 
-    spec = await _plan(team=team, user=user, prompt=prompt, window_days=window_days, trace_id=trace_correlation_id)
-    rendered_results, failed_count = await _execute_plan(spec, team, user, trace_correlation_id)
-    report = await _synthesize(spec, rendered_results, team, user, trace_correlation_id)
-    # only after synthesis succeeds, so the event isn't recorded for a failed run
-    await _capture_report_quality(spec, failed_count, team, user, trace_correlation_id)
-    return report
+    with slo_operation(
+        spec=SloSpec(
+            distinct_id=str(user.distinct_id),
+            area=SloArea.ANALYTIC_PLATFORM,
+            operation=SloOperation.AI_SUBSCRIPTION_PROMPT_GENERATION,
+            team_id=team.id,
+            resource_id=str(trace_correlation_id) if trace_correlation_id is not None else None,
+        ),
+        properties={"window_days": window_days},
+    ) as slo:
+        try:
+            spec = await _plan(
+                team=team, user=user, prompt=prompt, window_days=window_days, trace_id=trace_correlation_id
+            )
+            rendered_results, failed_count = await _execute_plan(spec, team, user, trace_correlation_id)
+            report = await _synthesize(spec, rendered_results, team, user, trace_correlation_id)
+        except PromptRejectedError:
+            # A rejected prompt is the input guard doing its job, not a service failure — keep it out of
+            # the error budget so user-supplied bad input doesn't burn the SLO.
+            slo.succeed(rejected=True)
+            raise
+
+        total_steps = len(spec.plan.steps)
+        # A degraded report (a step failed but synthesis still shipped) is an SLO success, tagged so the
+        # coverage signal survives. A raised stage error is recorded as a failure by slo_operation itself.
+        slo.tag(
+            total_steps=total_steps,
+            failed_steps=failed_count,
+            query_coverage=(total_steps - failed_count) / total_steps if total_steps else 0.0,
+            degraded=bool(failed_count),
+        )
+        if failed_count:
+            logger.warning(
+                "ai_report.delivered_degraded",
+                trace_correlation_id=trace_correlation_id,
+                failed_steps=failed_count,
+                total_steps=total_steps,
+            )
+        return report
 
 
 async def _plan(
@@ -297,44 +331,6 @@ async def _arequest_hogql_fix(
         return None
     fixed = result.fixed_hogql.strip()
     return fixed or None
-
-
-async def _capture_report_quality(
-    spec: EnrichedPromptSpec,
-    failed_count: int,
-    team: Team,
-    user: User,
-    trace_correlation_id: Optional[Union[int, str]],
-) -> None:
-    total_steps = len(spec.plan.steps)
-    if failed_count:
-        logger.warning(
-            "ai_report.delivered_degraded",
-            trace_correlation_id=trace_correlation_id,
-            failed_steps=failed_count,
-            total_steps=total_steps,
-        )
-
-    def _emit() -> None:
-        with ph_scoped_capture() as capture:
-            capture(
-                distinct_id=user.distinct_id,
-                event="ai_subscription_report_generated",
-                properties={
-                    "feature": "ai_subscription",
-                    "subscription_id": trace_correlation_id,
-                    "team_id": team.id,
-                    "total_steps": total_steps,
-                    "failed_steps": failed_count,
-                    "query_coverage": (total_steps - failed_count) / total_steps if total_steps else 0.0,
-                    "degraded": bool(failed_count),
-                },
-            )
-
-    try:
-        await asyncio.to_thread(_emit)
-    except Exception:
-        logger.warning("ai_report.quality_capture_failed", trace_correlation_id=trace_correlation_id, exc_info=True)
 
 
 __all__ = ["generate_ai_report", "AiReportStageError", "ReportStage"]
