@@ -1,1 +1,1 @@
-1191_delete_relationless_subscriptions
+1192_subscription_ai_fields
