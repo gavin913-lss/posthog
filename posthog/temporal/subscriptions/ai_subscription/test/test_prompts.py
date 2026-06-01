@@ -69,6 +69,7 @@ def test_resolve_prompt_captures_source_event_on_cloud(
         "prompt_name": "ai-subscription-synthesis",
         "source": expected_source,
         "team_id": 7,
+        "$process_person_profile": False,
     }
 
 

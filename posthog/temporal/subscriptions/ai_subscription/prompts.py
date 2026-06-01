@@ -1,3 +1,5 @@
+from typing import Literal
+
 import structlog
 
 from posthog.cloud_utils import is_cloud
@@ -14,7 +16,7 @@ SYNTHESIS_PROMPT_NAME = "ai-subscription-synthesis"
 HOGQL_FIX_PROMPT_NAME = "ai-subscription-hogql-fix"
 
 
-def _capture_prompt_source(team: Team, name: str, source: str) -> None:
+def _capture_prompt_source(team: Team, name: str, source: Literal["managed", "fallback"]) -> None:
     # Emit a PostHog event (rather than just a Prometheus counter) so a silent fallback — e.g. a
     # managed prompt that stops resolving after a rename — surfaces in analytics where Max can flag it.
     # Capture must never break report generation, so it's best-effort.
@@ -25,7 +27,14 @@ def _capture_prompt_source(team: Team, name: str, source: str) -> None:
             capture(
                 distinct_id=str(team.uuid),
                 event="ai_subscription_prompt_resolved",
-                properties={"feature": "ai_subscription", "prompt_name": name, "source": source, "team_id": team.id},
+                properties={
+                    "feature": "ai_subscription",
+                    "prompt_name": name,
+                    "source": source,
+                    "team_id": team.id,
+                    # system signal keyed by team, not a person — don't create a person profile for it
+                    "$process_person_profile": False,
+                },
             )
     except Exception:
         logger.warning("ai_subscription.prompt_source_capture_failed", team_id=team.id, prompt_name=name, exc_info=True)

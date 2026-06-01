@@ -105,6 +105,24 @@ class TestExternalUrlExfilGuard:
         assert "https://app.posthog.com/insights/abc" in all_text
         assert "`https://app.posthog.com" not in all_text  # PostHog hosts stay live, not defanged
 
+    def test_slack_defangs_scheme_less_www_url(self) -> None:
+        # Slack also linkifies scheme-less www. URLs — those must be defanged too
+        message = _build_ai_slack_message(_mock_subscription(), "Visit www.attacker.example/exfil now")
+        all_text = " ".join(b["text"]["text"] for b in message.blocks if b["type"] == "section")
+        assert "`www.attacker.example/exfil`" in all_text
+
+    def test_slack_keeps_www_posthog_url(self) -> None:
+        message = _build_ai_slack_message(_mock_subscription(), "Docs at www.posthog.com/docs here")
+        all_text = " ".join(b["text"]["text"] for b in message.blocks if b["type"] == "section")
+        assert "www.posthog.com/docs" in all_text
+        assert "`www.posthog.com" not in all_text
+
+    def test_slack_does_not_mangle_email_addresses(self) -> None:
+        message = _build_ai_slack_message(_mock_subscription(), "Reach me@www.example.com for access")
+        all_text = " ".join(b["text"]["text"] for b in message.blocks if b["type"] == "section")
+        assert "me@www.example.com" in all_text
+        assert "`www.example.com" not in all_text
+
     def test_email_defangs_bare_external_url(self) -> None:
         html = render_ai_email_html("Visit https://attacker.example/exfil now")
         assert 'href="https://attacker.example' not in html  # never a live link

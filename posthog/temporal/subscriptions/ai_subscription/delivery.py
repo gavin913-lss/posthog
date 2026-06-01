@@ -72,11 +72,12 @@ _ALLOWED_LINK_URLS = ["https://posthog.com", "https://*.posthog.com"]
 # URL group supports one level of balanced parens so e.g. wikipedia /Foo_(bar) doesn't truncate
 _MARKDOWN_LINK_RE = re.compile(r"\[([^\]]*)\]\(((?:[^()\s]+|\([^)]*\))+)(?:\s+\"[^\"]*\")?\)")
 _MARKDOWN_IMAGE_RE = re.compile(r"!\[([^\]]*)\]\([^)]*\)")
-# `<https://…>` autolinks and bare `https://…` URLs — the forms Slack still linkifies/unfurls
-# after the markdown-link pass above. The bare matcher skips URLs already inside `(`, `<`, or a
-# backtick code span so it doesn't re-process kept markdown/autolinks or double-wrap.
+# `<https://…>` autolinks and bare `https://…` / `www.…` URLs — the forms Slack still linkifies and
+# unfurls after the markdown-link pass above. The bare matcher skips URLs already inside `(`, `<`, a
+# backtick code span, or an email local-part (`@`) so it doesn't re-process kept markdown/autolinks,
+# double-wrap, or mangle addresses.
 _AUTOLINK_RE = re.compile(r"<(https?://[^\s>]+)>")
-_BARE_URL_RE = re.compile(r"(?<![(<`])(https?://[^\s<>)\]`]+)")
+_BARE_URL_RE = re.compile(r"(?<![(<`@])((?:https?://|www\.)[^\s<>)\]`]+)")
 
 
 def _is_allowed_link_url(url: str) -> bool:
@@ -87,24 +88,29 @@ def _is_allowed_link_url(url: str) -> bool:
     return hostname_in_allowed_url_list(_ALLOWED_LINK_URLS, host)
 
 
-def _neutralize_url(url: str) -> str:
-    # Keep PostHog links live; defang anything else into an inert code span so neither Slack
-    # (auto-unfurl / linkify) nor email can turn an injected URL into a live request or a one-click
-    # link. The URL stays visible so a reader can see what the report tried to embed.
-    return url if _is_allowed_link_url(url) else f"`{url}`"
+def _neutralize_url(url: str, keep_as: str | None = None) -> str:
+    # Keep PostHog links live (rendered as `keep_as` when given — e.g. an autolink's `<url>` wrapper —
+    # otherwise the bare URL); defang anything else into an inert code span so neither Slack (auto-
+    # unfurl / linkify) nor email can turn an injected URL into a live request or a one-click link. The
+    # URL stays visible so a reader can see what the report tried to embed. Scheme-less `www.` URLs get
+    # a scheme prepended only for the host check, never in the output.
+    check_url = url if url.startswith(("http://", "https://")) else f"https://{url}"
+    if _is_allowed_link_url(check_url):
+        return keep_as if keep_as is not None else url
+    return f"`{url}`"
 
 
 def _strip_external_links_markdown(markdown: str) -> str:
     """Neutralize externally-hosted URLs in LLM-generated report content. Markdown images are
-    dropped; `[text](url)`, `<url>` autolinks, and bare URLs keep PostHog hosts live and defang any
-    other host. Defends against an injected synthesis prompt embedding an exfil/phishing URL that a
-    delivery channel would auto-unfurl or linkify."""
+    dropped; `[text](url)`, `<url>` autolinks, and bare `http(s)://` / `www.` URLs keep PostHog hosts
+    live and defang any other host. Defends against an injected synthesis prompt embedding an
+    exfil/phishing URL that a delivery channel would auto-unfurl or linkify."""
     md = _MARKDOWN_IMAGE_RE.sub(lambda m: m.group(1) or "", markdown)
     md = _MARKDOWN_LINK_RE.sub(
         lambda m: m.group(0) if _is_allowed_link_url(m.group(2)) else m.group(1),
         md,
     )
-    md = _AUTOLINK_RE.sub(lambda m: m.group(0) if _is_allowed_link_url(m.group(1)) else f"`{m.group(1)}`", md)
+    md = _AUTOLINK_RE.sub(lambda m: _neutralize_url(m.group(1), keep_as=m.group(0)), md)
     md = _BARE_URL_RE.sub(lambda m: _neutralize_url(m.group(1)), md)
     return md
 
