@@ -1,6 +1,8 @@
 import { actions, connect, kea, listeners, path, reducers, selectors } from 'kea'
+import { loaders } from 'kea-loaders'
 import { toast } from 'react-toastify'
 
+import api from 'lib/api'
 import { FEATURE_FLAGS } from 'lib/constants'
 import { featureFlagLogic } from 'lib/logic/featureFlagLogic'
 import { eventUsageLogic } from 'lib/utils/eventUsageLogic'
@@ -16,14 +18,22 @@ import type { SurfaceKey } from './prompts'
 // so we err heavily on the side of not overloading people.
 const COOLDOWN_MS = 7 * 24 * 60 * 60 * 1000
 
-export function tryShowMCPHint(surfaceKey: SurfaceKey): void {
+export interface TryShowMCPHintOptions {
+    /**
+     * Replaces the generic per-surface toast prompt with one derived from the action the user just took
+     * (e.g. the actual feature flag they created). Plain string; quoting is handled by the toast component.
+     */
+    derivedPrompt?: string
+}
+
+export function tryShowMCPHint(surfaceKey: SurfaceKey, options: TryShowMCPHintOptions = {}): void {
     try {
         const mounted = mcpHintLogic.findMounted()
         if (!mounted?.values.featureEnabled) {
             return
         }
 
-        mounted.actions.tryShowHint(surfaceKey)
+        mounted.actions.tryShowHint(surfaceKey, options.derivedPrompt)
     } catch (error) {
         console.warn('[mcpHint] dispatch failed; host listener will continue', { surfaceKey, error })
     }
@@ -36,7 +46,7 @@ export const mcpHintLogic = kea<mcpHintLogicType>([
         actions: [userLogic, ['updateUser'], eventUsageLogic, ['reportMCPHintShown', 'reportMCPHintDismissed']],
     })),
     actions({
-        tryShowHint: (surfaceKey: SurfaceKey) => ({ surfaceKey }),
+        tryShowHint: (surfaceKey: SurfaceKey, derivedPrompt?: string) => ({ surfaceKey, derivedPrompt }),
         recordShown: (now: number) => ({ now }),
         dismissSurface: (surfaceKey: SurfaceKey) => ({ surfaceKey }),
         dismissAll: true,
@@ -68,6 +78,29 @@ export const mcpHintLogic = kea<mcpHintLogicType>([
             },
         ],
     }),
+    loaders({
+        topEvents: [
+            [] as string[],
+            {
+                // Used to weave the team's real event names into the SQL editor's example prompts.
+                // One-shot per logic mount; if the call fails we silently fall back to default examples.
+                loadTopEvents: async () => {
+                    try {
+                        const response = await api.eventDefinitions.list({
+                            limit: 10,
+                            ordering: '-last_seen_at',
+                        })
+                        const names = (response.results ?? [])
+                            .map((d) => d.name)
+                            .filter((n): n is string => Boolean(n))
+                        return names
+                    } catch {
+                        return []
+                    }
+                },
+            },
+        ],
+    }),
     selectors({
         featureEnabled: [
             (s) => [s.featureFlags],
@@ -78,9 +111,13 @@ export const mcpHintLogic = kea<mcpHintLogicType>([
             (s) => [s.localGlobalOptOut, s.user],
             (localOptOut: boolean, user: UserType | null): boolean => Boolean(localOptOut || user?.hide_mcp_hints),
         ],
+        userRole: [
+            (s) => [s.user],
+            (user: UserType | null): string | null => user?.role_at_organization ?? null,
+        ],
     }),
     listeners(({ values, actions }) => ({
-        tryShowHint: ({ surfaceKey }) => {
+        tryShowHint: ({ surfaceKey, derivedPrompt }) => {
             const now = Date.now()
             const sinceLast = values.lastShownAt ? now - values.lastShownAt : Infinity
             const cooldownActive = values.lastShownAt !== null && sinceLast < COOLDOWN_MS
@@ -90,7 +127,7 @@ export const mcpHintLogic = kea<mcpHintLogicType>([
             }
 
             try {
-                toast.info(<MCPHintToast surfaceKey={surfaceKey} />, {
+                toast.info(<MCPHintToast surfaceKey={surfaceKey} derivedPrompt={derivedPrompt} />, {
                     toastId: `mcp-hint-${surfaceKey}-${now}`,
                     autoClose: false,
                     closeOnClick: false,

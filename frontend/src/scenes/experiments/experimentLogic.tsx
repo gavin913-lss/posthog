@@ -1422,7 +1422,9 @@ export const experimentLogic = kea<experimentLogicType>([
                 actions.refreshExperimentResults(false, 'manual')
                 actions.setUnmodifiedExperiment(structuredClone(experimentWithMetricOrdering))
                 globalSetupLogic.findMounted()?.actions.markTaskAsCompleted(SetupTaskId.LaunchExperiment)
-                tryShowMCPHint('experiments.launch')
+                tryShowMCPHint('experiments.launch', {
+                    derivedPrompt: experiment.name ? `Launch experiment ${experiment.name}` : undefined,
+                })
             } catch (error: any) {
                 lemonToast.error(error.detail || 'Failed to launch experiment')
             } finally {

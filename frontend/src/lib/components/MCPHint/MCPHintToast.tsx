@@ -1,4 +1,4 @@
-import { useActions } from 'kea'
+import { useActions, useValues } from 'kea'
 import { useState } from 'react'
 
 import { IconSparkles } from '@posthog/icons'
@@ -9,23 +9,33 @@ import { cn } from 'lib/utils/css-classes'
 import { AgentBadgeRotator } from './AgentBadgeRotator'
 import { mcpHintLogic } from './mcpHintLogic'
 import { MCPInstallCommand } from './MCPInstallCommand'
-import { SURFACE_PROMPTS, type SurfaceKey } from './prompts'
+import { formatDerivedToastPrompt, getSurfacePrompts, type SurfaceKey } from './prompts'
 
 const linkClass =
     'text-xs text-muted hover:text-default underline underline-offset-2 cursor-pointer bg-transparent border-0 !p-0 !m-0'
 
-export function MCPHintToast({ surfaceKey }: { surfaceKey: SurfaceKey }): JSX.Element {
+export function MCPHintToast({
+    surfaceKey,
+    derivedPrompt,
+}: {
+    surfaceKey: SurfaceKey
+    /** If provided, replaces the per-surface default toast prompt with this action-derived string. */
+    derivedPrompt?: string
+}): JSX.Element {
     const { dismissSurface, dismissAll } = useActions(mcpHintLogic)
+    const { userRole } = useValues(mcpHintLogic)
     const [showHideOptions, setShowHideOptions] = useState(false)
 
-    const prompt = SURFACE_PROMPTS[surfaceKey].toast
+    const prompt = derivedPrompt
+        ? formatDerivedToastPrompt(derivedPrompt)
+        : getSurfacePrompts(surfaceKey, { role: userRole }).toast
 
     return (
         <div className="flex flex-col gap-1 py-1 pr-1 text-default min-w-0 items-start">
             <div className="flex items-center gap-1.5 text-sm">
                 <IconSparkles className="size-4 shrink-0" />
                 <span>
-                    Next time, ask <AgentBadgeRotator /> to do it for you:
+                    Next time, ask <AgentBadgeRotator surfaceKey={surfaceKey} /> to do it for you:
                 </span>
             </div>
             <div className="text-xs italic text-muted leading-snug">{prompt}</div>
