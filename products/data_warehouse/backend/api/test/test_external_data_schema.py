@@ -29,7 +29,7 @@ from posthog.temporal.data_imports.sources.stripe.source import StripeSource
 from products.data_warehouse.backend.api.test.utils import create_external_data_source_ok
 from products.data_warehouse.backend.direct_postgres import DIRECT_POSTGRES_URL_PATTERN
 from products.data_warehouse.backend.external_data_source.webhooks import WebhookHogFunctionCreateResult
-from products.data_warehouse.backend.types import ExternalDataSourceType
+from products.data_warehouse.backend.types import ExternalDataSourceType, IncrementalFieldType
 from products.warehouse_sources.backend.models.external_data_schema import ExternalDataSchema
 from products.warehouse_sources.backend.models.external_data_source import ExternalDataSource
 from products.warehouse_sources.backend.models.table import DataWarehouseTable
@@ -469,7 +469,12 @@ class TestExternalDataSchema(APIBaseTest):
             supports_incremental=True,
             supports_append=True,
             incremental_fields=[
-                {"label": "created_at", "type": "datetime", "field": "created", "field_type": "integer"}
+                {
+                    "label": "created_at",
+                    "type": IncrementalFieldType.DateTime,
+                    "field": "created",
+                    "field_type": IncrementalFieldType.Integer,
+                }
             ],
             detected_primary_keys=["id"],
         )
@@ -1108,10 +1113,7 @@ class TestUpdateExternalDataSchema:
         assert schedule_desc.schedule.state.paused is False
 
     def test_update_schema_change_should_sync_on_without_sync_type(self, team, user, client: HttpClient, temporal):
-        """Test that we can turn on a schema that doesn't have a sync type set.
-
-        Not sure in which cases this can happen.
-        """
+        """Enabling a schema with no sync type derives a default sync method instead of rejecting."""
         client.force_login(user)
         source_id = create_external_data_source_ok(client, team.pk)
         schema = ExternalDataSchema.objects.filter(source_id=source_id, should_sync=False).first()
@@ -1136,7 +1138,10 @@ class TestUpdateExternalDataSchema:
             content_type="application/json",
         )
 
-        assert response.status_code == 400
+        assert response.status_code == 200
+        schema.refresh_from_db()
+        assert schema.should_sync is True
+        assert schema.sync_type is not None
 
     def test_update_schema_exposes_direct_postgres_table_without_sync_type(
         self, team, user, client: HttpClient, temporal
