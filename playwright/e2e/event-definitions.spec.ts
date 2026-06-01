@@ -14,16 +14,11 @@ test.describe('Event Definitions', () => {
         const eventName = await page.locator('tbody tr .PropertyKeyInfo__text').first().innerText()
 
         await expect(page.locator('[data-attr=event-definitions-table-view-recordings]').first()).toBeVisible()
-        // View recordings opens the replay page in a new browser tab
-        const popupPromise = page.context().waitForEvent('page')
         await page.locator('[data-attr=event-definitions-table-view-recordings]').first().click()
-        const replayTab = await popupPromise
-        await expect(replayTab).toHaveURL(/replay/)
+        expect(page.url()).toMatch(/replay/)
 
-        await replayTab.locator('.LemonButton--has-icon .LemonButton__content').filter({ hasText: 'Filters' }).click()
+        await page.locator('.LemonButton--has-icon .LemonButton__content').filter({ hasText: 'Filters' }).click()
 
-        await expect(replayTab.locator('.UniversalFilterButton').first()).toContainText(eventName, {
-            ignoreCase: true,
-        })
+        await expect(page.locator('.UniversalFilterButton').first()).toContainText(eventName, { ignoreCase: true })
     })
 })

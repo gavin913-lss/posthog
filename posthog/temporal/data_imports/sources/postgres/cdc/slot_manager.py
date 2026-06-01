@@ -108,10 +108,12 @@ def create_slot(conn: psycopg.Connection, slot_name: str) -> str:
     return consistent_point
 
 
-def drop_slot(conn: psycopg.Connection, slot_name: str) -> None:
-    """Drop just the replication slot. Best-effort — used by self-managed rollback,
-    where the publication is customer-owned and must not be touched.
-    """
+def drop_slot_and_publication(
+    conn: psycopg.Connection,
+    slot_name: str,
+    pub_name: str,
+) -> None:
+    """Drop a replication slot and publication. Best-effort — logs and continues on errors."""
     with conn.cursor() as cur:
         try:
             cur.execute(
@@ -126,15 +128,6 @@ def drop_slot(conn: psycopg.Connection, slot_name: str) -> None:
             conn.rollback()
             logger.exception("Failed to drop replication slot '%s'", slot_name)
 
-
-def drop_slot_and_publication(
-    conn: psycopg.Connection,
-    slot_name: str,
-    pub_name: str,
-) -> None:
-    """Drop a replication slot and publication. Best-effort — logs and continues on errors."""
-    drop_slot(conn, slot_name)
-    with conn.cursor() as cur:
         try:
             cur.execute(
                 sql.SQL("DROP PUBLICATION IF EXISTS {}").format(sql.Identifier(pub_name)),

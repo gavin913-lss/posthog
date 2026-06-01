@@ -3,7 +3,7 @@ import { useActions, useValues } from 'kea'
 import { LemonButton, LemonDialog, LemonSelect } from '@posthog/lemon-ui'
 
 import { useHogfetti } from 'lib/components/Hogfetti/Hogfetti'
-import { newInternalTab } from 'lib/utils/newInternalTab'
+import { sceneLogic } from 'scenes/sceneLogic'
 import { urls } from 'scenes/urls'
 
 import { ErrorTrackingIssue } from '~/queries/schema/schema-general'
@@ -26,6 +26,7 @@ export function IssueActions({ issues, selectedIds }: IssueActionsProps): JSX.El
     const { filterGroup } = useValues(issueFiltersLogic)
     const { setFilterGroup } = useActions(issueFiltersLogic)
     const { setSelectedIssueIds } = useActions(bulkSelectLogic)
+    const { newTab } = useActions(sceneLogic)
     const { trigger: triggerHogfetti, HogfettiComponent } = useHogfetti()
 
     const hasAtLeastTwoIssues = selectedIds.length >= 2
@@ -34,7 +35,7 @@ export function IssueActions({ issues, selectedIds }: IssueActionsProps): JSX.El
         selectedIds.forEach((id) => {
             const issue = issues.find((issue) => issue.id === id)
             if (issue) {
-                newInternalTab(urls.errorTrackingIssue(id, { timestamp: issue.last_seen }))
+                newTab(urls.errorTrackingIssue(id, { timestamp: issue.last_seen }))
             }
         })
     }

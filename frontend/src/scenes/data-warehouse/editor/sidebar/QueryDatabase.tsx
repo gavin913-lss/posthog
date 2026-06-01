@@ -22,7 +22,6 @@ import { LemonField } from 'lib/lemon-ui/LemonField'
 import { LemonInput } from 'lib/lemon-ui/LemonInput'
 import { LemonTree, LemonTreeRef, TreeDataItem } from 'lib/lemon-ui/LemonTree/LemonTree'
 import { TreeNodeDisplayIcon } from 'lib/lemon-ui/LemonTree/LemonTreeUtils'
-import { Link } from 'lib/lemon-ui/Link'
 import { ButtonPrimitive } from 'lib/ui/Button/ButtonPrimitives'
 import { DropdownMenuGroup, DropdownMenuItem } from 'lib/ui/DropdownMenu/DropdownMenu'
 import { getAccessControlDisabledReason } from 'lib/utils/accessControlUtils'
@@ -689,35 +688,51 @@ export const QueryDatabase = ({
                             <div className="flex gap-px">
                                 {!isEmbeddedMode && item.record.type !== 'endpoint' ? (
                                     <>
-                                        <DropdownMenuItem asChild>
-                                            <Link
-                                                to={urls.sqlEditor({ view_id: item.record.view?.id })}
-                                                onClick={(e) => e.stopPropagation()}
-                                                disabledReason={editViewAccessDisabledReason}
-                                                buttonProps={{
-                                                    menuItem: true,
-                                                    className: 'flex-1 rounded-r-none',
-                                                }}
+                                        <DropdownMenuItem
+                                            asChild
+                                            onClick={(e) => {
+                                                e.stopPropagation()
+                                                if (editViewAccessDisabledReason) {
+                                                    return
+                                                }
+                                                openItemEditor(item)
+                                            }}
+                                        >
+                                            <ButtonPrimitive
+                                                menuItem
+                                                className="flex-1 rounded-r-none"
+                                                disabledReasons={
+                                                    editViewAccessDisabledReason
+                                                        ? { [editViewAccessDisabledReason]: true }
+                                                        : {}
+                                                }
                                             >
                                                 {editLabel}
-                                            </Link>
+                                            </ButtonPrimitive>
                                         </DropdownMenuItem>
-                                        <DropdownMenuItem asChild>
-                                            <Link
-                                                to={urls.sqlEditor({ view_id: item.record.view?.id })}
-                                                target="_blank"
-                                                targetBlankIcon={false}
-                                                onClick={(e) => e.stopPropagation()}
-                                                disabledReason={editViewAccessDisabledReason}
+                                        <DropdownMenuItem
+                                            asChild
+                                            onClick={(e) => {
+                                                e.stopPropagation()
+                                                if (editViewAccessDisabledReason) {
+                                                    return
+                                                }
+                                                openItemEditor(item, true)
+                                            }}
+                                        >
+                                            <ButtonPrimitive
+                                                menuItem
+                                                className="px-2 rounded-l-none"
+                                                iconOnly
                                                 tooltip={editLabel}
-                                                buttonProps={{
-                                                    menuItem: true,
-                                                    iconOnly: true,
-                                                    className: 'px-2 rounded-l-none',
-                                                }}
+                                                disabledReasons={
+                                                    editViewAccessDisabledReason
+                                                        ? { [editViewAccessDisabledReason]: true }
+                                                        : {}
+                                                }
                                             >
                                                 <IconExternal />
-                                            </Link>
+                                            </ButtonPrimitive>
                                         </DropdownMenuItem>
                                     </>
                                 ) : (

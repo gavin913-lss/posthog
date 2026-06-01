@@ -26,6 +26,7 @@ import { ButtonPrimitive } from 'lib/ui/Button/ButtonPrimitives'
 import { ContextMenu, ContextMenuContent, ContextMenuGroup, ContextMenuTrigger } from 'lib/ui/ContextMenu/ContextMenu'
 import { Label } from 'lib/ui/Label/Label'
 import { WrappingLoadingSkeleton } from 'lib/ui/WrappingLoadingSkeleton/WrappingLoadingSkeleton'
+import { getRelativeNextPath } from 'lib/utils'
 import { cn } from 'lib/utils/css-classes'
 import { urls } from 'scenes/urls'
 import { userLogic } from 'scenes/userLogic'
@@ -647,7 +648,8 @@ export interface SearchInputProps {
 }
 
 function SearchInput({ autoFocus, className }: SearchInputProps): JSX.Element {
-    const { searchValue, setSearchValue, isActive, inputRef, showAskAiLink, onAskAiClick } = useSearchContext()
+    const { searchValue, setSearchValue, isActive, inputRef, highlightedItemRef, showAskAiLink, onAskAiClick } =
+        useSearchContext()
 
     const { text: placeholderText, isVisible: placeholderVisible } = useRotatingPlaceholder(isActive && !searchValue)
 
@@ -660,13 +662,24 @@ function SearchInput({ autoFocus, className }: SearchInputProps): JSX.Element {
 
     const handleInputKeyDown = useCallback(
         (e: React.KeyboardEvent) => {
+            if (e.key === 'Enter' && e.shiftKey) {
+                e.preventDefault()
+                e.stopPropagation()
+                const item = highlightedItemRef.current
+                if (item?.href) {
+                    const safePath = getRelativeNextPath(item.href, window.location)
+                    if (safePath) {
+                        window.open(safePath, '_blank', 'noopener,noreferrer')
+                    }
+                }
+            }
             if (e.key === 'Tab' && showAskAiLink && searchValue.trim()) {
                 e.preventDefault()
                 onAskAiClick?.()
                 router.actions.push(urls.ai(undefined, searchValue.trim()))
             }
         },
-        [showAskAiLink, searchValue, onAskAiClick]
+        [highlightedItemRef, showAskAiLink, searchValue, onAskAiClick]
     )
 
     useEffect(() => {
@@ -989,6 +1002,9 @@ function SearchFooter({ children }: SearchFooterProps): JSX.Element {
                     )}
                     <span>
                         <KeyboardShortcut enter /> to activate
+                    </span>
+                    <span>
+                        <KeyboardShortcut shift enter /> to open in new tab
                     </span>
                     {searchValue.trim() && (
                         <span>

@@ -181,7 +181,12 @@ export const onboardingLogic = kea<onboardingLogicType>([
     selectors({
         onboardingFlowVariant: [
             (s) => [s.featureFlags],
-            (featureFlags): string => (featureFlags[FEATURE_FLAGS.ONBOARDING_FLOW_VARIANT] as string) || 'control',
+            (featureFlags): string => {
+                // Only a string variant is meaningful; a missing flag or a boolean value
+                // (e.g. flag returns `true`/`false`) falls back to the existing flow.
+                const variant = featureFlags[FEATURE_FLAGS.ONBOARDING_FLOW_VARIANT]
+                return typeof variant === 'string' ? variant : 'control'
+            },
         ],
         canInviteTeammates: [
             (s) => [s.currentOrganization, s.user],

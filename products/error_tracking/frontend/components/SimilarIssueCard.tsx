@@ -1,3 +1,4 @@
+import { useActions } from 'kea'
 import { ReactNode } from 'react'
 
 import { IconDirectedGraph, IconOpenSidebar } from '@posthog/icons'
@@ -5,7 +6,7 @@ import { LemonButton } from '@posthog/lemon-ui'
 
 import { getRuntimeFromLib } from 'lib/components/Errors/utils'
 import { TZLabel } from 'lib/components/TZLabel'
-import { newInternalTab } from 'lib/utils/newInternalTab'
+import { sceneLogic } from 'scenes/sceneLogic'
 import { urls } from 'scenes/urls'
 
 import { ErrorTrackingIssue } from '~/queries/schema/schema-general'
@@ -62,12 +63,13 @@ export default function SimilarIssueCard({
 }
 
 function OpenInNewTabAction({ issueId }: { issueId: string }): JSX.Element {
+    const { newTab } = useActions(sceneLogic)
     return (
         <LemonButton
             type="secondary"
             size="xsmall"
             icon={<IconOpenSidebar />}
-            onClick={() => newInternalTab(urls.errorTrackingIssue(issueId))}
+            onClick={() => newTab(urls.errorTrackingIssue(issueId))}
             tooltip="Open in new tab"
         />
     )

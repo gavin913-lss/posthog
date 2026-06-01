@@ -19,10 +19,10 @@ import { superpowersLogic } from 'lib/components/Superpowers/superpowersLogic'
 import { FEATURE_FLAGS } from 'lib/constants'
 import { featureFlagLogic } from 'lib/logic/featureFlagLogic'
 import { userHasAccess } from 'lib/utils/accessControlUtils'
-import { newInternalTab } from 'lib/utils/newInternalTab'
 import { addProductIntentForCrossSell } from 'lib/utils/product-intents'
 import { organizationLogic } from 'scenes/organizationLogic'
 import { projectLogic } from 'scenes/projectLogic'
+import { sceneLogic } from 'scenes/sceneLogic'
 import { QuickSurveyType } from 'scenes/surveys/quick-create/types'
 import { QuickSurveyModal } from 'scenes/surveys/QuickSurveyModal'
 import { urls } from 'scenes/urls'
@@ -77,6 +77,7 @@ function ExperimentSceneMenuBarInner(): JSX.Element | null {
     const { currentOrganization } = useValues(organizationLogic)
     const { openPauseExperimentModal, openResumeExperimentModal } = useActions(modalsLogic)
     const { superpowersEnabled } = useValues(superpowersLogic)
+    const { newTab } = useActions(sceneLogic)
 
     const [duplicateModalOpen, setDuplicateModalOpen] = useState(false)
     const [copyToProjectModalOpen, setCopyToProjectModalOpen] = useState(false)
@@ -156,7 +157,7 @@ function ExperimentSceneMenuBarInner(): JSX.Element | null {
                             <SceneMenuBarSubMenu label="Create">
                                 {exposureCohortId ? (
                                     <SceneMenuBarItem
-                                        onClick={() => newInternalTab(urls.cohort(exposureCohortId))}
+                                        onClick={() => newTab(urls.cohort(exposureCohortId))}
                                         data-attr={`${RESOURCE_TYPE}-menubar-view-exposure-cohort`}
                                     >
                                         <IconEye />
