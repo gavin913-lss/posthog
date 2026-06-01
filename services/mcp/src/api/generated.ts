@@ -22786,6 +22786,7 @@ export namespace Schemas {
     * `slack` - Slack
     * `support_queue` - Support Queue
     * `session_summaries` - Session Summaries
+    * `posthog_ai` - PostHog AI
     * `signal_report` - Signal Report
     * `signals_scout` - Signals Scout
      */
@@ -22800,6 +22801,7 @@ export namespace Schemas {
       Slack: 'slack',
       SupportQueue: 'support_queue',
       SessionSummaries: 'session_summaries',
+      PosthogAi: 'posthog_ai',
       SignalReport: 'signal_report',
       SignalsScout: 'signals_scout',
     } as const;
@@ -36647,6 +36649,53 @@ export namespace Schemas {
       fields: S3PresignedPostFields;
     }
 
+    /**
+     * * `action` - action
+    * `dashboard` - dashboard
+    * `error_tracking_issue` - error_tracking_issue
+    * `evaluation` - evaluation
+    * `event` - event
+    * `insight` - insight
+    * `notebook` - notebook
+    * `text` - text
+     */
+    export type SandboxAttachedContextItemTypeEnum = typeof SandboxAttachedContextItemTypeEnum[keyof typeof SandboxAttachedContextItemTypeEnum];
+
+
+    export const SandboxAttachedContextItemTypeEnum = {
+      Action: 'action',
+      Dashboard: 'dashboard',
+      ErrorTrackingIssue: 'error_tracking_issue',
+      Evaluation: 'evaluation',
+      Event: 'event',
+      Insight: 'insight',
+      Notebook: 'notebook',
+      Text: 'text',
+    } as const;
+
+    /**
+     * One typed attachment carried by a sandbox message (01_CONTEXT § 1).
+     */
+    export interface SandboxAttachedContextItem {
+      /** Attachment kind. Entity types carry `id` (+ optional `name`); `text` carries `value`.
+
+      * `action` - action
+      * `dashboard` - dashboard
+      * `error_tracking_issue` - error_tracking_issue
+      * `evaluation` - evaluation
+      * `event` - event
+      * `insight` - insight
+      * `notebook` - notebook
+      * `text` - text */
+      type: SandboxAttachedContextItemTypeEnum;
+      /** Entity identifier — integer for `dashboard`/`action`, string short_id/UUID otherwise. Absent for `text`. */
+      id?: unknown;
+      /** Optional human-readable label rendered in the context block. */
+      name?: string;
+      /** Free-text content. Only for `text` attachments. */
+      value?: string;
+    }
+
     export interface SandboxEnvironment {
       readonly id: string;
       /** @maxLength 255 */
@@ -36671,6 +36720,40 @@ export namespace Schemas {
       readonly created_by: UserBasic;
       readonly created_at: string;
       readonly updated_at: string;
+    }
+
+    /**
+     * Request body for the non-streaming `POST /conversations/{id}/sandbox/` route (02_CORE § 4).
+     */
+    export interface SandboxMessage {
+      /**
+         * The user's message text.
+         * @maxLength 40000
+         */
+      content: string;
+      /** Client-generated trace id correlated with the resulting Run's SSE stream. */
+      trace_id?: string;
+      /** Typed PostHog entities (and free text) attached to this message. */
+      attached_context?: SandboxAttachedContextItem[];
+    }
+
+    /**
+     * Response for `POST /conversations/{id}/sandbox/` — the IDs the frontend opens SSE against.
+     */
+    export interface SandboxMessageResponse {
+      /** The products/tasks Task backing the conversation. */
+      task_id: string;
+      /** The Run the frontend opens SSE against. */
+      run_id: string;
+      /**
+         * Echo of the request trace id, if provided.
+         * @nullable
+         */
+      trace_id: string | null;
+      /** Current status of the targeted Run (e.g. `queued`, `in_progress`). */
+      run_status: string;
+      /** True when a new Run was created (first message or terminal resume); false for an in-progress follow-up. */
+      just_created_run: boolean;
     }
 
     export interface ScoreDefinitionCreate {
