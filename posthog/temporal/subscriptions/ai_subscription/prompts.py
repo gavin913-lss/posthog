@@ -1,14 +1,24 @@
 import structlog
+from prometheus_client import Counter
 
 from posthog.models import Team
 from posthog.storage.llm_prompt_cache import get_prompt_by_name_from_cache
 
 logger = structlog.get_logger(__name__)
 
-# LLMPrompt names teams can author in the Prompt product to override the defaults below.
-PLANNER_PROMPT_NAME = "ai_subscription_planner"
-SYNTHESIS_PROMPT_NAME = "ai_subscription_synthesis"
-HOGQL_FIX_PROMPT_NAME = "ai_subscription_hogql_fix"
+# LLMPrompt names teams author in the Prompt product to override the code defaults below. These match
+# the prompts authored in the dogfooding project; a team-authored prompt of the same name wins.
+PLANNER_PROMPT_NAME = "ai-subscription-planner"
+SYNTHESIS_PROMPT_NAME = "ai-subscription-synthesis"
+HOGQL_FIX_PROMPT_NAME = "ai-subscription-hogql-fix"
+
+# Mirrors the subscription-summary prompt resolution: tracks whether a report ran on a product-managed
+# prompt or the code default, so a silent fallback (e.g. a name mismatch) is observable rather than invisible.
+PROMPT_SOURCE = Counter(
+    "posthog_ai_subscription_prompt_source_total",
+    "Whether an AI subscription report used a managed (LLMPrompt) or fallback (code) prompt.",
+    ["prompt_name", "source"],
+)
 
 
 def resolve_prompt(team: Team, name: str, default: str) -> str:
@@ -18,11 +28,14 @@ def resolve_prompt(team: Team, name: str, default: str) -> str:
         cached = get_prompt_by_name_from_cache(team, name)
     except Exception:
         logger.warning("ai_subscription.prompt_lookup_failed", team_id=team.id, prompt_name=name, exc_info=True)
+        PROMPT_SOURCE.labels(prompt_name=name, source="fallback").inc()
         return default
     if cached is not None:
         stored = cached.get("prompt")
         if isinstance(stored, str) and stored.strip():
+            PROMPT_SOURCE.labels(prompt_name=name, source="managed").inc()
             return stored
+    PROMPT_SOURCE.labels(prompt_name=name, source="fallback").inc()
     return default
 
 
