@@ -2749,38 +2749,65 @@ class TestHogFunctionUsageReports(ClickhouseDestroyTablesMixin, TestCase, Clickh
         assert org_1_report["teams"]["4"]["workflow_sms_sent_in_period"] == 2
         assert org_1_report["teams"]["4"]["workflow_billable_invocations_in_period"] == 12
 
+    @parameterized.expand(
+        [
+            # A team that changed retention 14d -> 30d mid-period: 1.5 GB total split across both tiers
+            # (0.5 GB at 14d, 1.0 GB at 30d).
+            (
+                "split_retention_14d_to_30d",
+                {
+                    "bytes_ingested": 1_500_000_000,
+                    "bytes_ingested_retention_14d": 500_000_000,
+                    "bytes_ingested_retention_30d": 1_000_000_000,
+                    "records_ingested": 1000,
+                },
+                {
+                    "logs_bytes_in_period": 1_500_000_000,
+                    "logs_records_in_period": 1000,
+                    "logs_mb_in_period": 1500,
+                    "logs_retention_14d_mb_in_period": 500,
+                    "logs_retention_30d_mb_in_period": 1000,
+                    "logs_retention_90d_mb_in_period": 0,
+                },
+            ),
+            # A team on a single tier the whole period: 2.5 GB, all under 90d retention.
+            (
+                "single_tier_90d",
+                {
+                    "bytes_ingested": 2_500_000_000,
+                    "bytes_ingested_retention_90d": 2_500_000_000,
+                    "records_ingested": 2000,
+                },
+                {
+                    "logs_bytes_in_period": 2_500_000_000,
+                    "logs_records_in_period": 2000,
+                    "logs_mb_in_period": 2500,
+                    "logs_retention_14d_mb_in_period": 0,
+                    "logs_retention_30d_mb_in_period": 0,
+                    "logs_retention_90d_mb_in_period": 2500,
+                },
+            ),
+        ]
+    )
     @patch("posthog.tasks.usage_report.get_ph_client")
     @patch("posthog.tasks.usage_report.send_report_to_billing_service")
-    def test_logs_usage_metrics(self, billing_task_mock: MagicMock, posthog_capture_mock: MagicMock) -> None:
+    def test_logs_usage_metrics(
+        self,
+        _name: str,
+        metrics: dict[str, int],
+        expected: dict[str, int],
+        billing_task_mock: MagicMock,
+        posthog_capture_mock: MagicMock,
+    ) -> None:
         self._setup_teams()
 
-        # Create logs metrics for org 1 team 1: 1.5 GB
-        create_app_metric2(
-            team_id=self.org_1_team_1.id,
-            app_source="logs",
-            metric_name="bytes_ingested",
-            count=1_500_000_000,
-        )
-        create_app_metric2(
-            team_id=self.org_1_team_1.id,
-            app_source="logs",
-            metric_name="records_ingested",
-            count=1000,
-        )
-
-        # Create logs metrics for org 1 team 2: 2.5 GB
-        create_app_metric2(
-            team_id=self.org_1_team_2.id,
-            app_source="logs",
-            metric_name="bytes_ingested",
-            count=2_500_000_000,
-        )
-        create_app_metric2(
-            team_id=self.org_1_team_2.id,
-            app_source="logs",
-            metric_name="records_ingested",
-            count=2000,
-        )
+        for metric_name, count in metrics.items():
+            create_app_metric2(
+                team_id=self.org_1_team_1.id,
+                app_source="logs",
+                metric_name=metric_name,
+                count=count,
+            )
 
         period = get_previous_day(at=now() + relativedelta(days=1))
         period_start, period_end = period
@@ -2792,20 +2819,11 @@ class TestHogFunctionUsageReports(ClickhouseDestroyTablesMixin, TestCase, Clickh
 
         assert org_1_report["organization_name"] == "Org 1"
 
-        # Test org-level logs metrics (sum of both teams)
-        assert org_1_report["logs_bytes_in_period"] == 4_000_000_000  # 1.5B + 2.5B
-        assert org_1_report["logs_records_in_period"] == 3000  # 1000 + 2000
-        assert org_1_report["logs_mb_in_period"] == 4000  # 1500 + 2500
-
-        # Test team 1 logs metrics
-        assert org_1_report["teams"]["3"]["logs_bytes_in_period"] == 1_500_000_000
-        assert org_1_report["teams"]["3"]["logs_records_in_period"] == 1000
-        assert org_1_report["teams"]["3"]["logs_mb_in_period"] == 1500
-
-        # Test team 2 logs metrics
-        assert org_1_report["teams"]["4"]["logs_bytes_in_period"] == 2_500_000_000
-        assert org_1_report["teams"]["4"]["logs_records_in_period"] == 2000
-        assert org_1_report["teams"]["4"]["logs_mb_in_period"] == 2500
+        # Only org_1_team_1 has logs, so the org-level rollup equals that single team's values.
+        team_1_report = org_1_report["teams"][str(self.org_1_team_1.id)]
+        for field, value in expected.items():
+            assert org_1_report[field] == value, field
+            assert team_1_report[field] == value, field
 
     def _logs_records_json(self, team_id: int, sdk_name: str | None, count: int) -> str:
         resource_attributes = {"telemetry.sdk.name": sdk_name} if sdk_name is not None else {}
