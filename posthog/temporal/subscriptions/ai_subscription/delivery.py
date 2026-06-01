@@ -8,6 +8,7 @@ from markdown_to_mrkdwn import SlackMarkdownConverter
 
 from posthog.api.utils import hostname_in_allowed_url_list
 from posthog.email import EmailMessage
+from posthog.models import Team, User
 from posthog.models.integration import Integration
 from posthog.models.subscription import Subscription, get_unsubscribe_token
 from posthog.sync import database_sync_to_async
@@ -71,6 +72,11 @@ _ALLOWED_LINK_URLS = ["https://posthog.com", "https://*.posthog.com"]
 # URL group supports one level of balanced parens so e.g. wikipedia /Foo_(bar) doesn't truncate
 _MARKDOWN_LINK_RE = re.compile(r"\[([^\]]*)\]\(((?:[^()\s]+|\([^)]*\))+)(?:\s+\"[^\"]*\")?\)")
 _MARKDOWN_IMAGE_RE = re.compile(r"!\[([^\]]*)\]\([^)]*\)")
+# `<https://…>` autolinks and bare `https://…` URLs — the forms Slack still linkifies/unfurls
+# after the markdown-link pass above. The bare matcher skips URLs already inside `(`, `<`, or a
+# backtick code span so it doesn't re-process kept markdown/autolinks or double-wrap.
+_AUTOLINK_RE = re.compile(r"<(https?://[^\s>]+)>")
+_BARE_URL_RE = re.compile(r"(?<![(<`])(https?://[^\s<>)\]`]+)")
 
 
 def _is_allowed_link_url(url: str) -> bool:
@@ -81,15 +87,25 @@ def _is_allowed_link_url(url: str) -> bool:
     return hostname_in_allowed_url_list(_ALLOWED_LINK_URLS, host)
 
 
+def _neutralize_url(url: str) -> str:
+    # Keep PostHog links live; defang anything else into an inert code span so neither Slack
+    # (auto-unfurl / linkify) nor email can turn an injected URL into a live request or a one-click
+    # link. The URL stays visible so a reader can see what the report tried to embed.
+    return url if _is_allowed_link_url(url) else f"`{url}`"
+
+
 def _strip_external_links_markdown(markdown: str) -> str:
-    """Drop markdown image syntax entirely; for `[text](url)`, keep links to PostHog hosts and
-    fall back to the bare text for any other host. Defends against an injected synthesis prompt
-    embedding an exfil URL that Slack would auto-unfurl."""
+    """Neutralize externally-hosted URLs in LLM-generated report content. Markdown images are
+    dropped; `[text](url)`, `<url>` autolinks, and bare URLs keep PostHog hosts live and defang any
+    other host. Defends against an injected synthesis prompt embedding an exfil/phishing URL that a
+    delivery channel would auto-unfurl or linkify."""
     md = _MARKDOWN_IMAGE_RE.sub(lambda m: m.group(1) or "", markdown)
     md = _MARKDOWN_LINK_RE.sub(
         lambda m: m.group(0) if _is_allowed_link_url(m.group(2)) else m.group(1),
         md,
     )
+    md = _AUTOLINK_RE.sub(lambda m: m.group(0) if _is_allowed_link_url(m.group(1)) else f"`{m.group(1)}`", md)
+    md = _BARE_URL_RE.sub(lambda m: _neutralize_url(m.group(1)), md)
     return md
 
 
@@ -116,14 +132,20 @@ def _split_text_into_chunks(text: str, limit: int = SLACK_MRKDWN_SECTION_LIMIT) 
     return chunks
 
 
+def _resolve_subscription_actors(subscription: Subscription) -> tuple[Team, User | None]:
+    # team/created_by are FK relations; reading them may hit the DB, so this runs off the event loop
+    return subscription.team, subscription.created_by
+
+
 async def generate_ai_subscription_markdown(subscription: Subscription) -> str:
+    team, user = await database_sync_to_async(_resolve_subscription_actors, thread_sensitive=False)(subscription)
     # created_by is FK SET_NULL; the pipeline requires a non-None user
-    if subscription.created_by is None:
+    if user is None:
         raise PromptRejectedError("AI subscription has no creator (created_by deleted); cannot deliver.")
 
     return await generate_ai_report(
-        team=subscription.team,
-        user=subscription.created_by,
+        team=team,
+        user=user,
         prompt=subscription.prompt,
         window_days=subscription.ai_report_window_days,
         trace_correlation_id=subscription.id,
@@ -141,10 +163,9 @@ def send_email_ai_subscription_report(
     subscription: Subscription,
     markdown: str,
     delivery_run_id: str,
-    rendered_html: str | None = None,
 ) -> None:
     utm_tags = f"{UTM_TAGS_BASE}&utm_medium=email"
-    html = rendered_html if rendered_html is not None else render_ai_email_html(markdown)
+    html = render_ai_email_html(markdown)
     title = subscription.title or "Your PostHog AI report"
     subscription_url = subscription.url or absolute_uri(
         f"/project/{subscription.team_id}/subscriptions/{subscription.id}"
@@ -230,7 +251,8 @@ def _build_ai_slack_message(subscription: Subscription, markdown: str) -> SlackM
     thread_messages = [
         {"blocks": [{"type": "section", "text": {"type": "mrkdwn", "text": section}}]} for section in sections[1:]
     ]
-    return SlackMessageData(channel=channel, blocks=blocks, title=title, thread_messages=thread_messages)
+    # unfurl=False: report content is LLM-generated; never let Slack auto-fetch a link it contains.
+    return SlackMessageData(channel=channel, blocks=blocks, title=title, thread_messages=thread_messages, unfurl=False)
 
 
 async def send_slack_ai_subscription_report(

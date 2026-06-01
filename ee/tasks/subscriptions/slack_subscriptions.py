@@ -42,6 +42,9 @@ class SlackMessageData:
     blocks: list[dict[str, Any]]
     title: str
     thread_messages: list[dict[str, Any]] = field(default_factory=list)
+    # When False, Slack won't auto-unfurl links in the message — set by callers delivering
+    # untrusted (e.g. LLM-generated) content to close the server-side link-fetch exfil channel.
+    unfurl: bool = True
 
 
 @dataclass
@@ -230,14 +233,24 @@ def send_slack_message_with_integration(
 
     # Send main message
     message_res = slack_integration.client.chat_postMessage(
-        channel=message_data.channel, blocks=message_data.blocks, text=message_data.title
+        channel=message_data.channel,
+        blocks=message_data.blocks,
+        text=message_data.title,
+        unfurl_links=message_data.unfurl,
+        unfurl_media=message_data.unfurl,
     )
 
     thread_ts = message_res.get("ts")
     if thread_ts:
         # Send thread messages
         for thread_msg in message_data.thread_messages:
-            slack_integration.client.chat_postMessage(channel=message_data.channel, thread_ts=thread_ts, **thread_msg)
+            slack_integration.client.chat_postMessage(
+                channel=message_data.channel,
+                thread_ts=thread_ts,
+                unfurl_links=message_data.unfurl,
+                unfurl_media=message_data.unfurl,
+                **thread_msg,
+            )
 
 
 async def _send_slack_message_with_retry(client, max_retries: int = 3, **kwargs):
@@ -288,6 +301,8 @@ async def deliver_slack_message_data(
             channel=message_data.channel,
             blocks=message_data.blocks,
             text=message_data.title,
+            unfurl_links=message_data.unfurl,
+            unfurl_media=message_data.unfurl,
         )
         logger.info("deliver_slack_message_data.main_message_sent", subscription_id=subscription.id)
 
@@ -301,6 +316,8 @@ async def deliver_slack_message_data(
                         async_client,
                         channel=message_data.channel,
                         thread_ts=thread_ts,
+                        unfurl_links=message_data.unfurl,
+                        unfurl_media=message_data.unfurl,
                         **thread_msg,
                     )
                 except Exception as e:

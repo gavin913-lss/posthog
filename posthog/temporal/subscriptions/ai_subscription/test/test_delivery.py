@@ -88,6 +88,34 @@ class TestExternalUrlExfilGuard:
         all_text = " ".join(b["text"]["text"] for b in message.blocks if b["type"] == "section")
         assert "app.posthog.com/insights/abc" in all_text
 
+    def test_slack_defangs_bare_external_url(self) -> None:
+        # a bare (non-markdown) URL still gets linkified/unfurled by Slack — must be defanged
+        message = _build_ai_slack_message(_mock_subscription(), "Visit https://attacker.example/exfil?p=secret now")
+        all_text = " ".join(b["text"]["text"] for b in message.blocks if b["type"] == "section")
+        assert "`https://attacker.example/exfil?p=secret`" in all_text
+
+    def test_slack_defangs_autolink(self) -> None:
+        message = _build_ai_slack_message(_mock_subscription(), "See <https://attacker.example/exfil> here")
+        all_text = " ".join(b["text"]["text"] for b in message.blocks if b["type"] == "section")
+        assert "`https://attacker.example/exfil`" in all_text
+
+    def test_slack_keeps_bare_posthog_url(self) -> None:
+        message = _build_ai_slack_message(_mock_subscription(), "Open https://app.posthog.com/insights/abc now")
+        all_text = " ".join(b["text"]["text"] for b in message.blocks if b["type"] == "section")
+        assert "https://app.posthog.com/insights/abc" in all_text
+        assert "`https://app.posthog.com" not in all_text  # PostHog hosts stay live, not defanged
+
+    def test_email_defangs_bare_external_url(self) -> None:
+        html = render_ai_email_html("Visit https://attacker.example/exfil now")
+        assert 'href="https://attacker.example' not in html  # never a live link
+        assert "<code>" in html  # rendered as inert code, still visible
+        assert "attacker.example" in html
+
+    def test_disables_slack_unfurl(self) -> None:
+        # belt-and-suspenders to the content stripping: Slack must not auto-fetch any link in the report
+        message = _build_ai_slack_message(_mock_subscription(), "A short report.")
+        assert message.unfurl is False
+
 
 def _mock_subscription() -> MagicMock:
     sub = MagicMock()
