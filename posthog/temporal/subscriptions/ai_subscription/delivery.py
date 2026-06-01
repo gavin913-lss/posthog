@@ -72,12 +72,12 @@ _ALLOWED_LINK_URLS = ["https://posthog.com", "https://*.posthog.com"]
 # URL group supports one level of balanced parens so e.g. wikipedia /Foo_(bar) doesn't truncate
 _MARKDOWN_LINK_RE = re.compile(r"\[([^\]]*)\]\(((?:[^()\s]+|\([^)]*\))+)(?:\s+\"[^\"]*\")?\)")
 _MARKDOWN_IMAGE_RE = re.compile(r"!\[([^\]]*)\]\([^)]*\)")
-# `<https://…>` autolinks and bare `https://…` / `www.…` URLs — the forms Slack still linkifies and
-# unfurls after the markdown-link pass above. The bare matcher skips URLs already inside `(`, `<`, a
-# backtick code span, or an email local-part (`@`) so it doesn't re-process kept markdown/autolinks,
-# double-wrap, or mangle addresses.
-_AUTOLINK_RE = re.compile(r"<(https?://[^\s>]+)>")
-_BARE_URL_RE = re.compile(r"(?<![(<`@])((?:https?://|www\.)[^\s<>)\]`]+)")
+# `<scheme://…>` autolinks and bare `scheme://…` / `www.…` URLs — the forms Slack still linkifies and
+# unfurls after the markdown-link pass above. Case-insensitive so an uppercase scheme can't slip
+# through. The bare matcher skips only the `](url)` markdown-link context, `<` autolinks, backtick code
+# spans, and email local-parts (`@`); a URL in plain parentheses is still defanged.
+_AUTOLINK_RE = re.compile(r"<(https?://[^\s>]+)>", re.IGNORECASE)
+_BARE_URL_RE = re.compile(r"(?<!\]\()(?<![<`@])((?:https?://|www\.)[^\s<>)\]`]+)", re.IGNORECASE)
 
 
 def _is_allowed_link_url(url: str) -> bool:
@@ -94,7 +94,7 @@ def _neutralize_url(url: str, keep_as: str | None = None) -> str:
     # unfurl / linkify) nor email can turn an injected URL into a live request or a one-click link. The
     # URL stays visible so a reader can see what the report tried to embed. Scheme-less `www.` URLs get
     # a scheme prepended only for the host check, never in the output.
-    check_url = url if url.startswith(("http://", "https://")) else f"https://{url}"
+    check_url = url if url.lower().startswith(("http://", "https://")) else f"https://{url}"
     if _is_allowed_link_url(check_url):
         return keep_as if keep_as is not None else url
     return f"`{url}`"

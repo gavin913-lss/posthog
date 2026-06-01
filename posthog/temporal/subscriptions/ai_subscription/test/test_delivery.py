@@ -123,6 +123,24 @@ class TestExternalUrlExfilGuard:
         assert "me@www.example.com" in all_text
         assert "`www.example.com" not in all_text
 
+    def test_slack_defangs_parenthetical_external_url(self) -> None:
+        # a URL inside plain parentheses is preceded by `(` but is not a markdown link — still defang it
+        message = _build_ai_slack_message(_mock_subscription(), "Revenue event (https://attacker.example/track) spiked")
+        all_text = " ".join(b["text"]["text"] for b in message.blocks if b["type"] == "section")
+        assert "`https://attacker.example/track`" in all_text
+
+    def test_slack_defangs_uppercase_scheme_autolink(self) -> None:
+        # URL schemes are case-insensitive — an uppercase scheme must not slip past the matcher
+        message = _build_ai_slack_message(_mock_subscription(), "See <HTTPS://attacker.example/exfil> now")
+        all_text = " ".join(b["text"]["text"] for b in message.blocks if b["type"] == "section")
+        assert "`HTTPS://attacker.example/exfil`" in all_text
+
+    def test_email_defangs_uppercase_autolink(self) -> None:
+        html = render_ai_email_html("See <HTTPS://attacker.example/exfil> now")
+        assert "href=" not in html.lower()  # never a live link, regardless of scheme case
+        assert "<code>" in html
+        assert "attacker.example" in html
+
     def test_email_defangs_bare_external_url(self) -> None:
         html = render_ai_email_html("Visit https://attacker.example/exfil now")
         assert 'href="https://attacker.example' not in html  # never a live link
