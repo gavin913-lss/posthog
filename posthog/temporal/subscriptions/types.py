@@ -20,6 +20,11 @@ class DeliveryStatus:
     SKIPPED = "skipped"
 
 
+# Mirrors Subscription.ContentType.AI_PROMPT — a plain constant so the Temporal
+# workflow sandbox can route by content type without importing the Django model.
+AI_PROMPT_CONTENT_TYPE = "ai_prompt"
+
+
 class SubscriptionTriggerType:
     """How a subscription delivery was triggered.
 
@@ -38,6 +43,9 @@ class SubscriptionInfo:
     team_id: int
     distinct_id: str
     next_delivery_date: typing.Optional[str] = None
+    # Lets the scheduler fan out AI-prompt subscriptions to ProcessAISubscriptionWorkflow
+    # and everything else to ProcessSubscriptionWorkflow.
+    content_type: str = ""
 
 
 @dataclasses.dataclass
@@ -88,6 +96,12 @@ class DeliverSubscriptionInputs:
     previous_value: typing.Optional[str] = None
     invite_message: typing.Optional[str] = None
     change_summary: typing.Optional[str] = None
+    # AI subscriptions only: the SubscriptionDelivery row the upstream
+    # `generate_ai_subscription_report` activity wrote the report markdown onto.
+    # Delivery reads the report back from this row rather than receiving it on
+    # the wire (the markdown can exceed Temporal's ~2 MiB payload cap). None for
+    # non-AI deliveries.
+    delivery_id: typing.Optional[uuid.UUID] = None
 
 
 @dataclasses.dataclass
@@ -99,6 +113,9 @@ class ProcessSubscriptionWorkflowInputs:
     invite_message: typing.Optional[str] = None
     trigger_type: str = SubscriptionTriggerType.TARGET_CHANGE
     scheduled_at: typing.Optional[str] = None
+    # Lets HandleSubscriptionValueChangeWorkflow route AI-prompt subs to
+    # ProcessAISubscriptionWorkflow. Passed by the API from the loaded instance.
+    content_type: str = ""
 
 
 @dataclasses.dataclass
@@ -119,6 +136,7 @@ class TrackedSubscriptionInputs:
     slo: SloConfig | None = None
     trigger_type: str = SubscriptionTriggerType.TARGET_CHANGE
     scheduled_at: typing.Optional[str] = None
+    content_type: str = ""
 
 
 RecipientResultStatus = typing.Literal["success", "failed", "partial"]
@@ -133,6 +151,24 @@ class RecipientResult:
 
 @dataclasses.dataclass
 class DeliverSubscriptionResult:
+    recipient_results: list[RecipientResult] = dataclasses.field(default_factory=list)
+
+
+@dataclasses.dataclass
+class GenerateAIReportInputs:
+    subscription_id: int
+    # The report markdown is written onto this SubscriptionDelivery row rather than
+    # returned on the wire — it can exceed Temporal's ~2 MiB payload cap.
+    delivery_id: uuid.UUID
+
+
+@dataclasses.dataclass
+class GenerateAIReportResult:
+    """Outcome of the generation phase. `aborted` signals a terminal pre-delivery
+    failure (consent revoked, prompt invalid) that already auto-disabled the
+    subscription; the workflow records `recipient_results` as FAILED and skips delivery."""
+
+    aborted: bool = False
     recipient_results: list[RecipientResult] = dataclasses.field(default_factory=list)
 
 
