@@ -2,7 +2,7 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 from posthog.test.base import APIBaseTest
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 from posthog.models import EventDefinition, PropertyDefinition
 from posthog.temporal.subscriptions.ai_subscription.schemas import QueryPlan, QueryPlanStep
@@ -116,7 +116,7 @@ class TestGenerateQueryPlanSubstitution(APIBaseTest):
     Prompt *quality* (do the guardrails work?) belongs in an LLM eval, not a unit test."""
 
     @patch(f"{_SG}.MaxChatOpenAI")
-    def test_substitutes_prompt_and_context_into_system_message(self, mock_chat: object) -> None:
+    def test_substitutes_prompt_and_context_into_system_message(self, mock_chat: MagicMock) -> None:
         structured = mock_chat.return_value.with_structured_output.return_value
         structured.invoke.return_value = QueryPlan(
             overall_intent="intent",
@@ -138,7 +138,7 @@ class TestGenerateQueryPlanSubstitution(APIBaseTest):
         assert "{{{" not in system_content
 
     @patch(f"{_SG}.MaxChatOpenAI")
-    def test_rejects_malformed_planner_output(self, mock_chat: object) -> None:
+    def test_rejects_malformed_planner_output(self, mock_chat: MagicMock) -> None:
         structured = mock_chat.return_value.with_structured_output.return_value
         structured.invoke.return_value = "not a QueryPlan"
 
