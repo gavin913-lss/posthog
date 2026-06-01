@@ -178,6 +178,7 @@ export function NavTabChat({
                                                                                     to={AiChatListItem.getHref(
                                                                                         conversation.id
                                                                                     )}
+                                                                                    data-attr="nav-chat-history-conversation"
                                                                                     buttonProps={{
                                                                                         active:
                                                                                             conversation.id ===
