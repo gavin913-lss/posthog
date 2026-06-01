@@ -8,7 +8,7 @@ from temporalio import activity
 from posthog.models.user import User
 from posthog.temporal.common.logger import get_logger
 
-from products.tasks.backend.access import has_tasks_access
+from products.tasks.backend.access import is_posthog_code_user
 
 logger = get_logger(__name__)
 
@@ -21,17 +21,17 @@ class PostSlackUpdateInput:
 
 
 def _viewer_has_posthog_code_access(viewer: User | None) -> bool:
-    """Fail closed: missing creator or any flag-service error suppresses the link.
+    """Fail closed: missing creator or any access-check error suppresses the link.
 
-    The PostHog Code app is rolled out via cohort + invite redemption; surfacing
-    deep links to users who can't open them sends them into an install flow we
-    don't want to scale right now. Errors from the flag service therefore default
-    to "no access" rather than "show the link anyway".
+    The PostHog Code app is gated by invite redemption; surfacing deep links to
+    users who can't open them sends them into an install flow we don't want to
+    scale right now. Errors from the access check therefore default to "no
+    access" rather than "show the link anyway".
     """
     if viewer is None:
         return False
     try:
-        return has_tasks_access(viewer)
+        return is_posthog_code_user(viewer)
     except Exception:
         logger.exception("post_slack_update_access_check_failed", user_id=getattr(viewer, "id", None))
         return False

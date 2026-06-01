@@ -25,7 +25,7 @@ class TestPostSlackUpdate(TestCase):
         # Default the access gate to allow so existing call/URL assertions remain meaningful;
         # tests that exercise the deny / error paths re-patch it locally.
         self._access_patcher = patch(
-            "products.tasks.backend.temporal.process_task.activities.post_slack_update.has_tasks_access",
+            "products.tasks.backend.temporal.process_task.activities.post_slack_update.is_posthog_code_user",
             return_value=True,
         )
         self._access_patcher.start()
@@ -370,7 +370,7 @@ class TestPostSlackUpdate(TestCase):
         # ``logs_deeplink=None``) so the deep-link / web buttons are skipped.
         self._access_patcher.stop()
         deny_patcher = patch(
-            "products.tasks.backend.temporal.process_task.activities.post_slack_update.has_tasks_access",
+            "products.tasks.backend.temporal.process_task.activities.post_slack_update.is_posthog_code_user",
             return_value=False,
         )
         deny_patcher.start()
@@ -438,14 +438,14 @@ class TestPostSlackUpdate(TestCase):
         _mock_update_reaction,
         mock_post_completion,
     ):
-        # ``has_tasks_access`` is never reached when the run has no creator —
+        # ``is_posthog_code_user`` is never reached when the run has no creator —
         # a None viewer short-circuits to "no access" without consulting the
         # flag service.
         self._access_patcher.stop()
 
         sentinel = MagicMock(name="should_not_be_called")
         sentinel_patcher = patch(
-            "products.tasks.backend.temporal.process_task.activities.post_slack_update.has_tasks_access",
+            "products.tasks.backend.temporal.process_task.activities.post_slack_update.is_posthog_code_user",
             sentinel,
         )
         sentinel_patcher.start()
@@ -477,7 +477,7 @@ class TestPostSlackUpdate(TestCase):
         # confirm has access — and must not break the surrounding update.
         self._access_patcher.stop()
         boom_patcher = patch(
-            "products.tasks.backend.temporal.process_task.activities.post_slack_update.has_tasks_access",
+            "products.tasks.backend.temporal.process_task.activities.post_slack_update.is_posthog_code_user",
             side_effect=RuntimeError("flag service down"),
         )
         boom_patcher.start()
