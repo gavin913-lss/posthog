@@ -212,11 +212,6 @@ export function Nav(): JSX.Element {
                     onValueChange={(value) => {
                         posthog.capture('nav tab clicked', { tab: value })
                         setNavExperimentTab(value as NavExperimentTab)
-                        // Selecting Chat opens a fresh chat while still showing history in the panel,
-                        // so a single click lands you in the AI chat interface ready to type.
-                        if (value === 'chat') {
-                            router.actions.push(urls.ai())
-                        }
                     }}
                     orientation={isLayoutNavCollapsed ? 'vertical' : 'horizontal'}
                 >
@@ -230,6 +225,17 @@ export function Nav(): JSX.Element {
                                         render={(props) => (
                                             <ButtonPrimitive
                                                 {...props}
+                                                onClick={(event) => {
+                                                    props.onClick?.(event)
+                                                    // onValueChange only fires when the tab value changes, and
+                                                    // the Chat tab is persisted — so navigate from the click
+                                                    // itself to guarantee that clicking Chat always opens a fresh
+                                                    // chat, even when the Chat tab is already active (e.g. after
+                                                    // opening a past conversation from the history list).
+                                                    if (tab.id === 'chat') {
+                                                        router.actions.push(urls.ai())
+                                                    }
+                                                }}
                                                 className="group data-[composite-item-active]:bg-surface-tertiary w-1/2 justify-center"
                                                 data-attr={`nav-tab-${tab.id}`}
                                             >
