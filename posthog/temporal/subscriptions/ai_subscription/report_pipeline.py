@@ -80,11 +80,12 @@ class AiReportStageError(Exception):
 async def generate_ai_report(
     *,
     team: Team,
-    user: User,
+    user: Optional[User],
     prompt: Optional[str],
     window_days: int,
     trace_correlation_id: Optional[Union[int, str]] = None,
 ) -> str:
+    # created_by is FK SET_NULL, so a deleted creator surfaces as None at this public entry point.
     if user is None:
         raise PromptRejectedError("AI report must have a user to run.")
 
