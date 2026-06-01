@@ -118,15 +118,25 @@ function TracingSceneContents(): JSX.Element {
                     type: 'tracing',
                 }}
                 actions={
-                    <LemonButton
-                        to={TRACING_DOCS_URL}
-                        onClick={onDocsLinkClick}
-                        type="secondary"
-                        size="small"
-                        targetBlank
-                    >
-                        Documentation
-                    </LemonButton>
+                    <>
+                        <LemonButton
+                            size="small"
+                            type="secondary"
+                            icon={<IconFeedback />}
+                            onClick={() => posthog.displaySurvey(TRACING_FEEDBACK_SURVEY_ID)}
+                        >
+                            Feedback
+                        </LemonButton>
+                        <LemonButton
+                            to={TRACING_DOCS_URL}
+                            onClick={onDocsLinkClick}
+                            type="secondary"
+                            size="small"
+                            targetBlank
+                        >
+                            Documentation
+                        </LemonButton>
+                    </>
                 }
             />
             <LemonBanner
