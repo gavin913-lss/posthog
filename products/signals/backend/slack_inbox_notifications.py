@@ -6,9 +6,8 @@ PostHog users, and dispatch a Slack message to each user that has configured a
 Slack channel and integration in their `SignalUserAutonomyConfig`.
 
 Each user's `slack_notification_min_priority` filters out reports below the
-configured threshold (P0 is highest). When the report has no priority
-judgement, we notify regardless of the user's threshold — the inbox should
-not silently swallow these.
+configured threshold (P0 is highest). Reports without persisted actionability
+and priority judgments are skipped because they are not fully ready for review.
 
 Messages are framed for public channels: each post names the suggested reviewer
 (Slack @mention when email matches the workspace, otherwise their PostHog name).
@@ -36,6 +35,7 @@ from products.signals.backend.models import (
     SignalSourceConfig,
     SignalUserAutonomyConfig,
 )
+from products.signals.backend.report_generation.research import ActionabilityChoice
 from products.signals.backend.report_generation.resolve_reviewers import (
     enrich_reviewer_dicts_with_org_members,
     normalized_github_logins_from_suggested_reviewer_artefacts,
@@ -76,14 +76,14 @@ def _priority_rank(value: str | None) -> int | None:
 def _meets_min_priority(report_priority: str | None, min_priority: str | None) -> bool:
     """Whether a report with the given priority meets the user's min-priority threshold.
 
-    `min_priority=None` notifies for every report. When the report has no priority
-    (no priority_judgment artefact yet, or unrecognised value), we still notify —
-    suppression would silently drop new inbox items, which the user did not opt into.
+    `min_priority=None` notifies for every report with a recognised priority.
+    Missing or unrecognised report priorities are skipped because Slack
+    notifications should only go out once actionability and priority are persisted.
     """
-    if min_priority is None:
-        return True
     report_rank = _priority_rank(report_priority)
     if report_rank is None:
+        return False
+    if min_priority is None:
         return True
     min_rank = _priority_rank(min_priority)
     if min_rank is None:
@@ -108,6 +108,32 @@ def _latest_priority(report: SignalReport) -> str | None:
         return None
     value = data.get("priority")
     return value if isinstance(value, str) else None
+
+
+def _latest_actionability(report: SignalReport) -> str | None:
+    art = (
+        report.artefacts.filter(type=SignalReportArtefact.ArtefactType.ACTIONABILITY_JUDGMENT)
+        .order_by("-created_at")
+        .first()
+    )
+    if art is None:
+        return None
+    try:
+        data = json.loads(art.content)
+    except (json.JSONDecodeError, TypeError, ValueError):
+        return None
+    if not isinstance(data, dict):
+        return None
+    value = data.get("actionability")
+    return value if isinstance(value, str) else None
+
+
+def _ready_for_slack_notification(report: SignalReport, priority: str | None) -> bool:
+    if report.status != SignalReport.Status.READY:
+        return False
+    if _priority_rank(priority) is None:
+        return False
+    return _latest_actionability(report) == ActionabilityChoice.IMMEDIATELY_ACTIONABLE
 
 
 @dataclass(frozen=True)
@@ -330,11 +356,14 @@ def dispatch_inbox_item_notifications(
         )
         return 0
 
+    priority = _latest_priority(report)
+    if not _ready_for_slack_notification(report, priority):
+        return 0
+
     targets = _notification_targets_for_report(report)
     if not targets:
         return 0
 
-    priority = _latest_priority(report)
     sources = source_products or []
     implementation_pr_url = fetch_implementation_pr_urls_for_reports([str(report.id)]).get(str(report.id))
     users_by_id = {user.id: user for user in User.objects.filter(id__in=[config.user_id for config in targets])}
